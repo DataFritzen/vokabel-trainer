@@ -31,17 +31,10 @@ function buildDailyRound(snapshot: AppSnapshot, words: VocabularyItem[], roundNu
   const lastByWord = new Map<string, (typeof reviews)[number]>();
   for (const review of reviews) lastByWord.set(review.vocabularyId, review);
 
-  const newSeenToday = new Set(reviews.filter((review) => review.wasNew).map((review) => review.vocabularyId));
-  const dailyNewIds = new Set(newSeenToday);
-  for (const word of words.filter((candidate) => candidate.card.reps === 0 && !dailyNewIds.has(candidate.id))) {
-    if (dailyNewIds.size >= snapshot.settings.dailyGoal) break;
-    dailyNewIds.add(word.id);
-  }
-
   const activeIds = new Set(snapshot.activeRound?.dayKey === dayKey ? snapshot.activeRound.vocabularyIds : []);
   const pool = words.filter((word) => {
     const seenToday = lastByWord.has(word.id);
-    return dailyNewIds.has(word.id) || seenToday || (word.card.reps > 0 && isDue(word.card));
+    return word.card.reps === 0 || seenToday || isDue(word.card);
   });
 
   const score = (word: VocabularyItem) => {
