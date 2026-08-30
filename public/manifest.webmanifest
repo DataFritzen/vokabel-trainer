@@ -1,0 +1,14 @@
+{
+  "name": "Sema 7 – Mein persönlicher Sprachweg",
+  "short_name": "Sema 7",
+  "description": "Persönlicher Offline-Vokabeltrainer für Swahili",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#faf7ef",
+  "theme_color": "#123f3a",
+  "lang": "de",
+  "categories": ["education", "travel"],
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

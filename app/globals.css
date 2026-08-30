@@ -1,0 +1,52 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn/tailwind.css';
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background); --color-foreground: var(--foreground);
+  --font-sans: var(--font-body); --font-heading: var(--font-display); --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+  --color-border: var(--border); --color-input: var(--input); --color-ring: var(--ring);
+  --color-primary: var(--primary); --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary); --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted); --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent); --color-accent-foreground: var(--accent-foreground);
+  --color-card: var(--card); --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover); --color-popover-foreground: var(--popover-foreground); --color-destructive: var(--destructive);
+  --radius-sm: calc(var(--radius) * .65); --radius-md: calc(var(--radius) * .82); --radius-lg: var(--radius); --radius-xl: calc(var(--radius) * 1.35); --radius-2xl: calc(var(--radius) * 1.75);
+}
+
+:root {
+  --font-body: "Segoe UI", Inter, system-ui, sans-serif; --font-display: Georgia, "Times New Roman", serif;
+  --background: oklch(.975 .012 88); --foreground: oklch(.25 .035 174); --card: oklch(.995 .006 88); --card-foreground: oklch(.25 .035 174);
+  --popover: oklch(.995 .006 88); --popover-foreground: oklch(.25 .035 174); --primary: oklch(.43 .09 175); --primary-foreground: oklch(.98 .012 87);
+  --secondary: oklch(.92 .035 83); --secondary-foreground: oklch(.37 .045 65); --muted: oklch(.94 .018 86); --muted-foreground: oklch(.5 .025 156);
+  --accent: oklch(.88 .08 47); --accent-foreground: oklch(.31 .065 31); --destructive: oklch(.58 .19 28); --border: oklch(.87 .025 93); --input: oklch(.87 .025 93); --ring: oklch(.55 .09 175); --radius: .8rem;
+}
+
+.dark {
+  --background: oklch(.19 .025 174); --foreground: oklch(.95 .014 87); --card: oklch(.23 .03 174); --card-foreground: oklch(.95 .014 87);
+  --popover: oklch(.23 .03 174); --popover-foreground: oklch(.95 .014 87); --primary: oklch(.72 .1 173); --primary-foreground: oklch(.19 .025 174);
+  --secondary: oklch(.3 .035 73); --secondary-foreground: oklch(.93 .025 83); --muted: oklch(.27 .025 174); --muted-foreground: oklch(.72 .025 160);
+  --accent: oklch(.68 .11 46); --accent-foreground: oklch(.19 .025 174); --border: oklch(.35 .025 174); --input: oklch(.35 .025 174); --ring: oklch(.7 .09 173);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html { scroll-behavior: smooth; }
+  body { @apply bg-background text-foreground; font-family: var(--font-body); }
+  button, a { -webkit-tap-highlight-color: transparent; }
+}
+
+@layer components {
+  .nav-item { @apply flex h-11 items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground; }
+  .nav-item svg { @apply size-[18px]; }
+  .nav-item-active { @apply bg-primary/10 text-primary; }
+  .metric { @apply rounded-xl bg-white/10 px-3 py-3 backdrop-blur-sm; }
+  .metric strong { @apply block text-xl font-semibold; }
+  .metric span { @apply mt-1 block text-[10px] leading-tight text-white/65; }
+  .mobile-nav { @apply flex flex-col items-center justify-center gap-1 rounded-xl py-1.5 text-[10px] font-medium text-muted-foreground; }
+  .mobile-nav svg { @apply size-[18px]; }
+  .mobile-nav-active { @apply bg-primary/10 text-primary; }
+}

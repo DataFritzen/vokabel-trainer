@@ -1,0 +1,112 @@
+'use client';
+
+import { useEffect, useRef, useState } from 'react';
+import { ArrowRight, BookOpenText, CalendarDays, Check, CircleAlert, Download, Flame, Headphones, Languages, Library, Mic2, Pencil, Plus, Search, Settings2, Sparkles, Upload, Volume2 } from 'lucide-react';
+
+import { LearningSession, type Grade } from '@/components/learning-session';
+import { WordEditor } from '@/components/word-editor';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import { createBackup, loadSnapshot, restoreBackup, saveSnapshot } from '@/lib/db';
+import { isDue, schedule } from '@/lib/scheduler';
+import type { AppSnapshot, BackupFile, VocabularyItem } from '@/lib/types';
+
+type View = 'today' | 'words' | 'progress' | 'settings';
+
+function dateLabel() {
+  return new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
+}
+
+function downloadJson(name: string, data: unknown) {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+  const link = document.createElement('a'); link.href = url; link.download = name; link.click(); URL.revokeObjectURL(url);
+}
+
+export function SemaApp() {
+  const [snapshot, setSnapshot] = useState<AppSnapshot | null>(null);
+  const [view, setView] = useState<View>('today');
+  const [editing, setEditing] = useState<VocabularyItem | 'new' | null>(null);
+  const [session, setSession] = useState<VocabularyItem[] | null>(null);
+  const [diagnostic, setDiagnostic] = useState(false);
+  const [toast, setToast] = useState('');
+
+  useEffect(() => { loadSnapshot().then(setSnapshot).catch(() => setToast('Die lokalen Daten konnten nicht geöffnet werden.')); }, []);
+  useEffect(() => { if (!snapshot) return; const timer = setTimeout(() => saveSnapshot(snapshot).catch(() => setToast('Speichern fehlgeschlagen.')), 120); return () => clearTimeout(timer); }, [snapshot]);
+  useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(''), 3200); return () => clearTimeout(timer); }, [toast]);
+
+  if (!snapshot) return <main className="grid min-h-screen place-items-center bg-background text-foreground"><div className="text-center"><span className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-primary text-xl font-bold text-white">7</span><p className="text-sm text-muted-foreground">Dein Sprachweg wird geladen …</p></div></main>;
+
+  const words = snapshot.vocabulary.filter((word) => word.language === snapshot.settings.activeLanguage);
+  const due = words.filter((word) => isDue(word.card)).length;
+  const learned = words.filter((word) => word.card.state === 2 && word.card.reps >= 2).length;
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const todayCount = snapshot.reviews.filter((review) => review.reviewedAt.startsWith(todayKey)).length;
+
+  const startSession = () => setSession([...words].sort((a, b) => Number(!isDue(a.card)) - Number(!isDue(b.card)) || a.card.reps - b.card.reps || new Date(a.card.due).getTime() - new Date(b.card.due).getTime()).slice(0, snapshot.settings.dailyGoal));
+  const saveWord = (item: VocabularyItem) => setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.some((word) => word.id === item.id) ? current.vocabulary.map((word) => word.id === item.id ? item : word) : [item, ...current.vocabulary] }));
+  const deleteWord = (id: string) => { if (!window.confirm('Diese Vokabel wirklich löschen?')) return; setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.filter((word) => word.id !== id) })); setEditing(null); };
+  const addReview = (item: VocabularyItem, grade: Grade) => setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.map((word) => word.id === item.id ? { ...word, card: schedule(word.card, grade), updatedAt: new Date().toISOString() } : word), reviews: [...current.reviews, { id: crypto.randomUUID(), vocabularyId: item.id, rating: grade, reviewedAt: new Date().toISOString() }] }));
+
+  return (
+    <main className="min-h-screen bg-background text-foreground">
+      <div className="mx-auto grid min-h-screen max-w-[1500px] grid-cols-1 lg:grid-cols-[240px_1fr]">
+        <aside className="hidden border-r border-border/80 bg-card/55 px-5 py-6 backdrop-blur lg:flex lg:flex-col">
+          <button onClick={() => setView('today')} className="flex items-center gap-3 px-2 text-left"><span className="grid size-10 place-items-center rounded-2xl bg-primary text-lg font-bold text-white">7</span><span><strong className="block font-heading text-xl leading-none">Sema 7</strong><span className="text-xs text-muted-foreground">Mein Sprachweg</span></span></button>
+          <nav className="mt-12 space-y-1" aria-label="Hauptnavigation"><SideNav active={view === 'today'} icon={Sparkles} label="Heute" onClick={() => setView('today')} /><SideNav active={view === 'words'} icon={Library} label="Meine Wörter" onClick={() => setView('words')} /><SideNav active={view === 'progress'} icon={CalendarDays} label="Fortschritt" onClick={() => setView('progress')} /><SideNav active={view === 'settings'} icon={Settings2} label="Einstellungen" onClick={() => setView('settings')} /></nav>
+          <div className="mt-auto rounded-2xl border border-primary/15 bg-primary/6 p-4"><div className="mb-2 flex items-center gap-2 text-sm font-semibold"><Languages className="size-4 text-primary" /> Nächste Sprache</div><p className="text-xs leading-relaxed text-muted-foreground">Spanisch ist im Datenmodell bereits vorbereitet.</p></div>
+        </aside>
+        <section className="px-4 pb-28 pt-5 sm:px-8 lg:px-12 lg:pb-12 lg:pt-8">
+          <header className="mx-auto flex max-w-6xl items-center justify-between"><div><p className="text-xs capitalize text-muted-foreground lg:text-sm">{dateLabel()}</p><h1 className="font-heading text-2xl font-bold lg:text-3xl">{view === 'today' ? 'Karibu zurück' : view === 'words' ? 'Meine Wörter' : view === 'progress' ? 'Mein Fortschritt' : 'Einstellungen'}</h1></div><Button variant="outline" className="rounded-xl" onClick={() => setEditing('new')}><Plus /><span className="hidden sm:inline">Wort hinzufügen</span></Button></header>
+          {view === 'today' && <Today snapshot={snapshot} words={words} due={due} learned={learned} todayCount={todayCount} onStart={startSession} onDiagnostic={() => setDiagnostic(true)} onWords={() => setView('words')} />}
+          {view === 'words' && <Words words={words} onEdit={setEditing} />}
+          {view === 'progress' && <ProgressPage snapshot={snapshot} words={words} learned={learned} />}
+          {view === 'settings' && <Settings snapshot={snapshot} onChange={setSnapshot} onToast={setToast} />}
+        </section>
+      </div>
+      <nav className="fixed inset-x-3 bottom-3 z-30 grid grid-cols-4 rounded-2xl border bg-card/95 p-2 shadow-xl backdrop-blur lg:hidden" aria-label="Mobile Navigation">{([['today', Sparkles, 'Heute'], ['words', Library, 'Wörter'], ['progress', CalendarDays, 'Verlauf'], ['settings', Settings2, 'Mehr']] as const).map(([key, Icon, label]) => <button key={key} className={`mobile-nav ${view === key ? 'mobile-nav-active' : ''}`} onClick={() => setView(key)}><Icon /><span>{label}</span></button>)}</nav>
+      {editing && <WordEditor item={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} onSave={(item) => { saveWord(item); setEditing(null); setToast('Vokabel gespeichert.'); }} onDelete={deleteWord} />}
+      {session && <LearningSession words={session} onClose={() => setSession(null)} onReview={addReview} />}
+      {diagnostic && <Diagnostic words={words} onClose={() => setDiagnostic(false)} onFinish={(results) => { setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.map((word) => results[word.id] ? { ...word, card: schedule(word.card, results[word.id]) } : word), settings: { ...current.settings, diagnosticDone: true } })); setDiagnostic(false); setToast('Einstufung gespeichert.'); }} />}
+      {toast && <div role="status" className="fixed bottom-24 left-1/2 z-[80] -translate-x-1/2 rounded-xl bg-[#123f3a] px-4 py-3 text-sm font-medium text-white shadow-xl lg:bottom-8">{toast}</div>}
+    </main>
+  );
+}
+
+function SideNav({ active, icon: Icon, label, onClick }: { active: boolean; icon: typeof Sparkles; label: string; onClick: () => void }) { return <button className={`nav-item w-full ${active ? 'nav-item-active' : ''}`} onClick={onClick}><Icon />{label}</button>; }
+
+function Today({ snapshot, words, due, learned, todayCount, onStart, onDiagnostic, onWords }: { snapshot: AppSnapshot; words: VocabularyItem[]; due: number; learned: number; todayCount: number; onStart: () => void; onDiagnostic: () => void; onWords: () => void }) {
+  const focus = words.find((word) => word.target.includes('Ninakushukuru')) ?? words[0];
+  const speak = () => { if (!focus || !('speechSynthesis' in window)) return; const speech = new SpeechSynthesisUtterance(focus.target); speech.lang = 'sw-TZ'; speech.rate = .82; speechSynthesis.cancel(); speechSynthesis.speak(speech); };
+  return <>
+    {!snapshot.settings.diagnosticDone && <button onClick={onDiagnostic} className="mx-auto mt-6 flex w-full max-w-6xl items-center gap-3 rounded-2xl border border-[#d5b06b]/40 bg-[#fff4d9] p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#efc16c]/30"><CircleAlert className="size-5 text-[#8b621a]" /></span><span className="flex-1"><strong className="block text-sm">Kurze Einstufung empfohlen</strong><span className="text-xs text-muted-foreground">Zeig Sema 7, was du schon kannst.</span></span><ArrowRight className="size-4" /></button>}
+    <div className="mx-auto mt-6 grid max-w-6xl gap-6 xl:grid-cols-[1.35fr_.65fr]">
+      <Card className="relative min-h-[430px] overflow-hidden border-0 bg-[linear-gradient(145deg,#123f3a_0%,#17665c_58%,#d6755c_145%)] text-white shadow-[0_28px_70px_rgba(20,66,61,.23)] ring-0"><div className="absolute right-[-70px] top-[-90px] size-72 rounded-full border-[42px] border-white/5" /><CardHeader className="relative p-6 sm:p-8"><div className="flex items-start justify-between"><div><p className="mb-3 text-xs font-semibold uppercase tracking-[.2em] text-white/65">Deine Runde heute</p><CardTitle className="font-heading text-4xl font-bold sm:text-5xl">7 kleine Schritte.<br />Ein echtes Gespräch.</CardTitle></div><span className="grid size-12 place-items-center rounded-2xl bg-white/12"><Flame className="text-[#ffd19e]" /></span></div></CardHeader><CardContent className="relative p-6 pt-0 sm:p-8 sm:pt-0"><div className="mb-7 grid grid-cols-3 gap-3"><div className="metric"><strong>{Math.min(todayCount, 7)}</strong><span>heute</span></div><div className="metric"><strong>{words.length}</strong><span>im Wortschatz</span></div><div className="metric"><strong>{learned}</strong><span>sicher gelernt</span></div></div><div className="mb-3 flex justify-between text-xs text-white/75"><span>{due} Karten fällig</span><span>{Math.min(todayCount, 7)} von 7</span></div><Progress value={todayCount / 7 * 100} className="mb-7 [&_[data-slot=progress-track]]:bg-white/15 [&_[data-slot=progress-indicator]]:bg-[#ffc081]" /><Button onClick={onStart} className="h-12 w-full rounded-xl bg-[#ffd09d] text-[#173e39] hover:bg-[#ffe0bc] sm:w-auto">7er-Runde starten <ArrowRight /></Button></CardContent></Card>
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-1">{focus && <Card className="border-0 bg-card shadow-lg ring-border/70"><CardHeader><div className="mb-4 flex items-center justify-between"><span className="grid size-10 place-items-center rounded-xl bg-[#fff0e7] text-[#ba5b45]"><BookOpenText /></span><span className="rounded-full bg-muted px-3 py-1 text-xs">Aus deiner Liste</span></div><CardDescription>Wort des Tages</CardDescription><CardTitle className="font-heading text-3xl text-primary">{focus.target}</CardTitle></CardHeader><CardContent><p>{focus.translation}</p>{focus.morphemes && <div className="mt-4 flex gap-1.5">{focus.morphemes.map((part) => <span key={part} className="rounded-lg bg-muted px-2.5 py-1 font-mono text-xs">{part}</span>)}</div>}<Button variant="outline" className="mt-5 rounded-xl" onClick={speak}><Volume2 /> Aussprache</Button></CardContent></Card>}<Card className="border-0 bg-[#fbf2db] ring-[#e8d7ae]"><CardHeader><span className="mb-3 grid size-10 place-items-center rounded-xl bg-white/70 text-[#9b6c20]"><Mic2 /></span><CardTitle className="font-heading text-xl">Hören & nachsprechen</CardTitle><CardDescription>Gerätestimme, eigene Aufnahme oder hochgeladenes KI-Audio – lokal auf deinem Gerät.</CardDescription></CardHeader><CardContent className="flex gap-2 text-xs text-[#806c48]"><Headphones className="size-4" /> Im Vokabel-Editor verfügbar</CardContent></Card></div>
+    </div>
+    <section className="mx-auto mt-8 max-w-6xl"><div className="mb-4 flex items-end justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Dein Fundament</p><h2 className="font-heading text-2xl font-bold">Als Nächstes</h2></div><Button variant="ghost" onClick={onWords}>Alle {words.length} ansehen <ArrowRight /></Button></div><div className="grid gap-3 md:grid-cols-3">{words.slice(0, 3).map((word) => <Card key={word.id} size="sm" className="border-0 bg-card ring-border/70"><CardContent className="flex items-center justify-between py-1"><div><strong className="block">{word.target}</strong><span className="text-sm text-muted-foreground">{word.translation}</span></div><span className="rounded-full bg-secondary px-2.5 py-1 text-xs">{word.card.reps ? 'Lernen' : 'Neu'}</span></CardContent></Card>)}</div></section>
+  </>;
+}
+
+function Words({ words, onEdit }: { words: VocabularyItem[]; onEdit: (item: VocabularyItem) => void }) {
+  const [query, setQuery] = useState(''); const [category, setCategory] = useState('Alle'); const categories = ['Alle', ...Array.from(new Set(words.map((word) => word.category))).sort()]; const shown = words.filter((word) => (category === 'Alle' || word.category === category) && `${word.target} ${word.translation}`.toLowerCase().includes(query.toLowerCase()));
+  return <div className="mx-auto mt-7 max-w-6xl"><div className="mb-5 grid gap-3 sm:grid-cols-[1fr_auto]"><label className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground" /><Input className="pl-9" placeholder="Swahili oder Deutsch suchen …" value={query} onChange={(event) => setQuery(event.target.value)} /></label><select className="h-9 rounded-xl border bg-card px-3 text-sm" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((value) => <option key={value}>{value}</option>)}</select></div><p className="mb-3 text-sm text-muted-foreground">{shown.length} Vokabeln</p><div className="grid gap-3 md:grid-cols-2">{shown.map((word) => <button key={word.id} onClick={() => onEdit(word)} className="group rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"><div className="flex gap-3"><span className="grid size-10 place-items-center rounded-xl bg-primary/8 font-heading font-bold text-primary">{word.target[0]}</span><span className="flex-1"><span className="flex flex-wrap gap-2"><strong>{word.target}</strong>{word.needsReview && <span className="rounded-full bg-[#fff0d5] px-2 py-0.5 text-[10px] text-[#885f1e]">Prüfen</span>}</span><span className="block text-sm text-muted-foreground">{word.translation}</span><span className="mt-2 block text-[11px] text-primary">{word.category} · {word.card.reps ? `${word.card.reps}× geübt` : 'neu'}</span></span><Pencil className="size-4 text-muted-foreground" /></div></button>)}</div></div>;
+}
+
+function ProgressPage({ snapshot, words, learned }: { snapshot: AppSnapshot; words: VocabularyItem[]; learned: number }) {
+  const days = Array.from({ length: 7 }, (_, i) => { const date = new Date(); date.setDate(date.getDate() - 6 + i); const key = date.toISOString().slice(0, 10); return { label: new Intl.DateTimeFormat('de-DE', { weekday: 'short' }).format(date), count: snapshot.reviews.filter((review) => review.reviewedAt.startsWith(key)).length }; }); const max = Math.max(7, ...days.map((day) => day.count));
+  return <div className="mx-auto mt-7 max-w-6xl"><div className="grid gap-4 sm:grid-cols-3"><Stat value={snapshot.reviews.length} label="Antworten insgesamt" /><Stat value={learned} label="sicher gelernt" /><Stat value={words.filter((word) => isDue(word.card)).length} label="heute fällig" /></div><Card className="mt-6 border-0 bg-card ring-border/70"><CardHeader><CardTitle className="font-heading text-2xl">Die letzten 7 Tage</CardTitle><CardDescription>Jede Antwort zählt – auch „Nochmal“ ist echter Fortschritt.</CardDescription></CardHeader><CardContent><div className="flex h-52 items-end gap-3">{days.map((day) => <div key={day.label} className="flex flex-1 flex-col items-center gap-2"><span className="text-xs font-semibold">{day.count}</span><div className="w-full max-w-14 rounded-t-xl bg-primary" style={{ height: `${Math.max(8, day.count / max * 150)}px` }} /><span className="text-xs text-muted-foreground">{day.label}</span></div>)}</div></CardContent></Card></div>;
+}
+
+function Stat({ value, label }: { value: number; label: string }) { return <Card className="border-0 bg-card ring-border/70"><CardContent className="p-5"><strong className="font-heading text-4xl text-primary">{value}</strong><span className="mt-1 block text-sm text-muted-foreground">{label}</span></CardContent></Card>; }
+
+function Settings({ snapshot, onChange, onToast }: { snapshot: AppSnapshot; onChange: (value: AppSnapshot) => void; onToast: (message: string) => void }) {
+  const fileRef = useRef<HTMLInputElement>(null); const exportBackup = async () => { downloadJson(`sema-7-backup-${new Date().toISOString().slice(0, 10)}.json`, await createBackup(snapshot)); onToast('Vollständiges Backup erstellt.'); }; const importBackup = async (file?: File) => { if (!file) return; try { const next = await restoreBackup(JSON.parse(await file.text()) as BackupFile); onChange(next); onToast('Backup wiederhergestellt.'); } catch (error) { onToast(error instanceof Error ? error.message : 'Ungültiges Backup.'); } };
+  return <div className="mx-auto mt-7 grid max-w-6xl gap-6 lg:grid-cols-2"><Card className="border-0 bg-card ring-border/70"><CardHeader><CardTitle className="font-heading text-2xl">Meine Lernroutine</CardTitle><CardDescription>Klein, regelmäßig und adaptiv.</CardDescription></CardHeader><CardContent className="space-y-5"><label className="block"><span className="mb-2 block text-sm font-medium">Karten pro Runde</span><select className="h-10 w-full rounded-xl border bg-background px-3" value={snapshot.settings.dailyGoal} onChange={(event) => onChange({ ...snapshot, settings: { ...snapshot.settings, dailyGoal: Number(event.target.value) } })}>{[5, 7, 10].map((value) => <option key={value} value={value}>{value}{value === 7 ? ' – empfohlen' : ''}</option>)}</select></label><label className="block"><span className="mb-2 block text-sm font-medium">Sprachziel</span><Input type="date" value={snapshot.settings.targetDate} onChange={(event) => onChange({ ...snapshot, settings: { ...snapshot.settings, targetDate: event.target.value } })} /></label><div className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">FSRS plant deine Wiederholungen. Die Daten bleiben auf deinem Gerät.</div></CardContent></Card><Card className="border-0 bg-card ring-border/70"><CardHeader><CardTitle className="font-heading text-2xl">Sichern & umziehen</CardTitle><CardDescription>Inklusive Lernstand, Bilder und Audios.</CardDescription></CardHeader><CardContent className="space-y-3"><Button className="w-full justify-start rounded-xl" variant="outline" onClick={exportBackup}><Download /> Backup exportieren</Button><Button className="w-full justify-start rounded-xl" variant="outline" onClick={() => fileRef.current?.click()}><Upload /> Backup wiederherstellen</Button><input ref={fileRef} hidden type="file" accept="application/json" onChange={(event) => importBackup(event.target.files?.[0])} /></CardContent></Card><Card className="overflow-hidden border-0 bg-[#123f3a] text-white ring-0 lg:col-span-2"><div className="grid md:grid-cols-[1fr_300px]"><CardContent className="p-6"><p className="text-xs uppercase tracking-[.18em] text-[#ffd09d]">Phase 2</p><h2 className="mt-2 font-heading text-3xl font-bold">Spanisch, gleiche Methode.</h2><p className="mt-3 text-sm text-white/70">Ein separates spanisches Deck lässt sich ergänzen, ohne deinen Swahili-Lernstand anzutasten.</p></CardContent><img src="/og.png" alt="Sema 7 – Mein persönlicher Sprachweg" className="h-full min-h-36 w-full object-cover opacity-85" /></div></Card></div>;
+}
+
+function Diagnostic({ words, onClose, onFinish }: { words: VocabularyItem[]; onClose: () => void; onFinish: (ratings: Record<string, Grade>) => void }) {
+  const [index, setIndex] = useState(0); const [ratings, setRatings] = useState<Record<string, Grade>>({}); const word = words[index]; const choose = (grade: Grade) => { const next = { ...ratings, [word.id]: grade }; if (index + 1 === words.length) onFinish(next); else { setRatings(next); setIndex(index + 1); } };
+  return <div className="fixed inset-0 z-50 grid place-items-center bg-[#082b28]/60 p-3 backdrop-blur-sm"><div className="w-full max-w-xl rounded-3xl bg-card p-6 shadow-2xl"><div className="flex justify-between"><div><p className="text-xs uppercase tracking-wider text-primary">Einstufung</p><h2 className="font-heading text-2xl font-bold">Was erkennst du schon?</h2></div><Button variant="ghost" onClick={onClose}>Schließen</Button></div><Progress className="mt-4" value={index / words.length * 100} /><p className="mt-2 text-xs text-muted-foreground">{index + 1} von {words.length}</p><h3 className="my-10 text-center font-heading text-4xl font-bold text-primary">{word.target}</h3><div className="grid gap-2 sm:grid-cols-3"><Button variant="outline" onClick={() => choose(1)}>Noch neu</Button><Button variant="outline" onClick={() => choose(2)}>Unsicher</Button><Button onClick={() => choose(4)}><Check /> Kann ich</Button></div></div></div>;
+}
