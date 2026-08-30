@@ -39,6 +39,15 @@ export type ReviewEntry = {
   vocabularyId: string;
   rating: 1 | 2 | 3 | 4;
   reviewedAt: string;
+  roundNumber?: number;
+  wasNew?: boolean;
+};
+
+export type ActiveRound = {
+  dayKey: string;
+  language: LanguageCode;
+  vocabularyIds: string[];
+  roundNumber: number;
 };
 
 export type AppSettings = {
@@ -54,6 +63,7 @@ export type AppSnapshot = {
   vocabulary: VocabularyItem[];
   reviews: ReviewEntry[];
   settings: AppSettings;
+  activeRound?: ActiveRound;
 };
 
 export type BackupFile = {

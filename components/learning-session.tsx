@@ -44,7 +44,7 @@ function normalize(value: string) {
   return value.toLocaleLowerCase('de').replace(/[.,!?()]/g, '').replace(/\s+/g, ' ').trim();
 }
 
-export function LearningSession({ words, onClose, onReview }: { words: VocabularyItem[]; onClose: () => void; onReview: (item: VocabularyItem, grade: Grade) => void }) {
+export function LearningSession({ words, roundNumber, onClose, onReview, onRepeat, onNewRound }: { words: VocabularyItem[]; roundNumber: number; onClose: () => void; onReview: (item: VocabularyItem, grade: Grade) => void; onRepeat: () => void; onNewRound: () => void }) {
   const [queue, setQueue] = useState(words.map((word) => ({ word, tries: 0 })));
   const [index, setIndex] = useState(0);
   const [answer, setAnswer] = useState('');
@@ -84,14 +84,14 @@ export function LearningSession({ words, onClose, onReview }: { words: Vocabular
           <div className="mx-auto max-w-md p-8 text-center">
             <span className="mx-auto grid size-16 place-items-center rounded-full bg-primary/10"><Check className="size-8 text-primary" /></span>
             <h2 className="mt-5 font-heading text-3xl font-bold">Hongera!</h2>
-            <p className="mt-2 text-muted-foreground">Deine Runde ist geschafft. Sieben Wörter haben gerade eine stärkere Gedächtnisspur bekommen.</p>
-            <Button className="mt-6 w-full rounded-xl" onClick={onClose}>Zurück zum Überblick</Button>
+            <p className="mt-2 text-muted-foreground">Runde {roundNumber} ist geschafft. Du entscheidest, ob dieselben sieben Karten noch einmal kommen oder der Tagesalgorithmus neu auswählt.</p>
+            <div className="mt-6 grid gap-2"><Button className="w-full rounded-xl" onClick={onRepeat}>Gleiche Runde wiederholen</Button><Button className="w-full rounded-xl" variant="outline" onClick={onNewRound}>Neue Runde zusammenstellen</Button><Button className="w-full rounded-xl" variant="ghost" onClick={onClose}>Für jetzt beenden</Button></div>
           </div>
         ) : (
           <div className="flex min-h-[620px] flex-col">
             <header className="flex items-center gap-3 border-b p-4">
               <Button size="icon" variant="ghost" onClick={onClose} aria-label="Runde schließen"><X /></Button>
-              <div className="flex-1"><div className="mb-1 flex justify-between text-xs text-muted-foreground"><span>Deine 7er-Runde</span><span>{Math.min(doneIds.length + 1, words.length)} / {words.length}</span></div><Progress value={doneIds.length / words.length * 100} /></div>
+              <div className="flex-1"><div className="mb-1 flex justify-between text-xs text-muted-foreground"><span>Runde {roundNumber} heute</span><span>{Math.min(doneIds.length + 1, words.length)} / {words.length}</span></div><Progress value={doneIds.length / words.length * 100} /></div>
             </header>
             <div className="flex flex-1 flex-col items-center justify-center p-5 sm:p-10">
               <ImageAsset id={current.word.imageMediaId} />
