@@ -1,7 +1,9 @@
 'use client';
 
 import { createSeedVocabulary } from '@/lib/seed-vocabulary';
+import { createGrammarExercises } from '@/lib/grammar-content';
 import type { AppSnapshot, BackupFile } from '@/lib/types';
+import { auditVocabulary } from '@/lib/vocabulary-audit';
 
 const DB_NAME = 'sema-7';
 const DB_VERSION = 1;
@@ -28,10 +30,13 @@ async function openDb(): Promise<IDBDatabase> {
 }
 
 export function createInitialSnapshot(): AppSnapshot {
+  const vocabulary = createSeedVocabulary();
   return {
-    version: 1,
-    vocabulary: createSeedVocabulary(),
+    version: 2,
+    vocabulary,
     reviews: [],
+    grammarExercises: createGrammarExercises(vocabulary),
+    grammarReviews: [],
     settings: {
       activeLanguage: 'sw',
       dailyGoal: 7,
@@ -42,12 +47,38 @@ export function createInitialSnapshot(): AppSnapshot {
   };
 }
 
+type LegacySnapshot = Omit<AppSnapshot, 'version' | 'grammarExercises' | 'grammarReviews'> & {
+  version: 1 | 2;
+  grammarExercises?: AppSnapshot['grammarExercises'];
+  grammarReviews?: AppSnapshot['grammarReviews'];
+};
+
+function migrateSnapshot(raw: LegacySnapshot): AppSnapshot {
+  const seed = createSeedVocabulary();
+  const existingIds = new Set(raw.vocabulary.map((word) => word.id));
+  const vocabulary = auditVocabulary([
+    ...raw.vocabulary,
+    ...seed.filter((word) => !existingIds.has(word.id)),
+  ]);
+  const generated = createGrammarExercises(vocabulary);
+  const storedById = new Map((raw.grammarExercises ?? []).map((exercise) => [exercise.id, exercise]));
+  const grammarExercises = generated.map((exercise) => {
+    const stored = storedById.get(exercise.id);
+    return stored ? { ...exercise, card: stored.card } : exercise;
+  });
+  return { ...raw, version: 2, vocabulary, grammarExercises, grammarReviews: raw.grammarReviews ?? [] };
+}
+
 export async function loadSnapshot(): Promise<AppSnapshot> {
   const db = await openDb();
   const tx = db.transaction('app', 'readwrite');
   const store = tx.objectStore('app');
-  const existing = await request(store.get(APP_KEY)) as AppSnapshot | undefined;
-  if (existing) return existing;
+  const existing = await request(store.get(APP_KEY)) as LegacySnapshot | undefined;
+  if (existing) {
+    const migrated = migrateSnapshot(existing);
+    await request(store.put(migrated, APP_KEY));
+    return migrated;
+  }
   const initial = createInitialSnapshot();
   await request(store.put(initial, APP_KEY));
   return initial;
@@ -97,11 +128,13 @@ export async function createBackup(snapshot: AppSnapshot): Promise<BackupFile> {
 }
 
 export async function restoreBackup(backup: BackupFile) {
-  if (backup.app !== 'sema-7' || backup.snapshot?.version !== 1) throw new Error('Diese Datei ist kein gültiges Sema-7-Backup.');
+  const raw = backup.snapshot as unknown as LegacySnapshot;
+  if (backup.app !== 'sema-7' || !raw || ![1, 2].includes(raw.version)) throw new Error('Diese Datei ist kein gültiges Sema-7-Backup.');
+  const migrated = migrateSnapshot(raw);
   const db = await openDb();
-  await request(db.transaction('app', 'readwrite').objectStore('app').put(backup.snapshot, APP_KEY));
+  await request(db.transaction('app', 'readwrite').objectStore('app').put(migrated, APP_KEY));
   const tx = db.transaction('media', 'readwrite');
   tx.objectStore('media').clear();
   for (const media of backup.media ?? []) tx.objectStore('media').put(dataUrlToBlob(media.dataUrl), media.id);
-  return backup.snapshot;
+  return migrated;
 }

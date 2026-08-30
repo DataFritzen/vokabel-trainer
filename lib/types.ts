@@ -27,11 +27,58 @@ export type VocabularyItem = {
   notes?: string;
   sourceText?: string;
   needsReview?: boolean;
+  partOfSpeech?: 'verb' | 'noun' | 'pronoun' | 'phrase' | 'adverb' | 'other';
+  lemma?: string;
+  verbProfileId?: string;
+  grammarForms?: {
+    infinitive: string;
+    stem: string;
+    meaning: string;
+    firstPresent: string;
+    you: string;
+    we: string;
+    negativeI: string;
+    objectPerspective?: boolean;
+  };
+  verification?: {
+    status: 'verified' | 'corrected' | 'nuance';
+    note: string;
+  };
   imageMediaId?: string;
   audioMediaId?: string;
   card: SerializedCard;
   createdAt: string;
   updatedAt: string;
+};
+
+export type GrammarExercise = {
+  id: string;
+  lessonId: string;
+  vocabularyId?: string;
+  kind: 'build' | 'transform' | 'negative' | 'sentence' | 'analyze';
+  title: string;
+  prompt: string;
+  answer: string;
+  alternatives?: string[];
+  hint?: string;
+  explanation: string;
+  card: SerializedCard;
+};
+
+export type GrammarLesson = {
+  id: string;
+  level: string;
+  title: string;
+  summary: string;
+  formula: string;
+  example: string;
+};
+
+export type GrammarReviewEntry = {
+  id: string;
+  exerciseId: string;
+  rating: 1 | 2 | 3 | 4;
+  reviewedAt: string;
 };
 
 export type ReviewEntry = {
@@ -60,9 +107,11 @@ export type AppSettings = {
 };
 
 export type AppSnapshot = {
-  version: 1;
+  version: 2;
   vocabulary: VocabularyItem[];
   reviews: ReviewEntry[];
+  grammarExercises: GrammarExercise[];
+  grammarReviews: GrammarReviewEntry[];
   settings: AppSettings;
   activeRound?: ActiveRound;
 };

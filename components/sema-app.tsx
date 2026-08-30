@@ -1,19 +1,23 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, BookOpenText, CalendarDays, Check, CircleAlert, Download, Flame, Headphones, Languages, Library, Mic2, Pencil, Plus, Search, Settings2, Sparkles, Upload, Volume2 } from 'lucide-react';
+import { ArrowRight, BookOpenCheck, BookOpenText, CalendarDays, Check, CircleAlert, Download, Flame, Headphones, Languages, Library, Mic2, Plus, Search, Settings2, Sparkles, Upload, Volume2 } from 'lucide-react';
 
+import { GrammarHub } from '@/components/grammar-hub';
+import { GrammarPractice } from '@/components/grammar-practice';
 import { LearningSession, type Grade } from '@/components/learning-session';
+import { VocabularyDetail } from '@/components/vocabulary-detail';
 import { WordEditor } from '@/components/word-editor';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { createBackup, loadSnapshot, restoreBackup, saveSnapshot } from '@/lib/db';
+import { grammarExercisesForVocabulary } from '@/lib/grammar-content';
 import { isDue, schedule } from '@/lib/scheduler';
-import type { AppSnapshot, BackupFile, VocabularyItem } from '@/lib/types';
+import type { AppSnapshot, BackupFile, GrammarExercise, VocabularyItem } from '@/lib/types';
 
-type View = 'today' | 'words' | 'progress' | 'settings';
+type View = 'today' | 'words' | 'grammar' | 'progress' | 'settings';
 type SessionState = { words: VocabularyItem[]; nonce: number };
 
 function dateLabel() {
@@ -63,7 +67,9 @@ export function SemaApp() {
   const [snapshot, setSnapshot] = useState<AppSnapshot | null>(null);
   const [view, setView] = useState<View>('today');
   const [editing, setEditing] = useState<VocabularyItem | 'new' | null>(null);
+  const [selectedWord, setSelectedWord] = useState<VocabularyItem | null>(null);
   const [session, setSession] = useState<SessionState | null>(null);
+  const [grammarSession, setGrammarSession] = useState<GrammarExercise[] | null>(null);
   const [diagnostic, setDiagnostic] = useState(false);
   const [toast, setToast] = useState('');
 
@@ -95,8 +101,14 @@ export function SemaApp() {
     setSnapshot({ ...snapshot, activeRound: { dayKey, language: snapshot.settings.activeLanguage, vocabularyIds: selected.map((word) => word.id), roundNumber } });
     setSession({ words: selected, nonce: Date.now() });
   };
-  const saveWord = (item: VocabularyItem) => setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.some((word) => word.id === item.id) ? current.vocabulary.map((word) => word.id === item.id ? item : word) : [item, ...current.vocabulary] }));
-  const deleteWord = (id: string) => { if (!window.confirm('Diese Vokabel wirklich löschen?')) return; setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.filter((word) => word.id !== id) })); setEditing(null); };
+  const saveWord = (item: VocabularyItem) => setSnapshot((current) => {
+    if (!current) return current;
+    const vocabulary = current.vocabulary.some((word) => word.id === item.id) ? current.vocabulary.map((word) => word.id === item.id ? item : word) : [item, ...current.vocabulary];
+    const refreshed = grammarExercisesForVocabulary(item);
+    const storedById = new Map(current.grammarExercises.map((exercise) => [exercise.id, exercise]));
+    return { ...current, vocabulary, grammarExercises: [...current.grammarExercises.filter((exercise) => exercise.vocabularyId !== item.id), ...refreshed.map((exercise) => ({ ...exercise, card: storedById.get(exercise.id)?.card ?? exercise.card }))] };
+  });
+  const deleteWord = (id: string) => { if (!window.confirm('Diese Vokabel wirklich löschen?')) return; setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.filter((word) => word.id !== id), grammarExercises: current.grammarExercises.filter((exercise) => exercise.vocabularyId !== id) })); setEditing(null); setSelectedWord(null); };
   const addReview = (item: VocabularyItem, grade: Grade) => setSnapshot((current) => {
     if (!current) return current;
     const now = new Date();
@@ -108,26 +120,39 @@ export function SemaApp() {
       reviews: [...current.reviews, { id: crypto.randomUUID(), vocabularyId: item.id, rating: grade, reviewedAt: now.toISOString(), dayKey, roundNumber: current.activeRound?.roundNumber, wasNew: firstReviewToday && item.card.reps === 0 }],
     };
   });
+  const addGrammarReview = (exercise: GrammarExercise, grade: Grade) => setSnapshot((current) => {
+    if (!current) return current;
+    const now = new Date();
+    const firstReviewToday = !current.grammarReviews.some((review) => review.exerciseId === exercise.id && localDayKey(new Date(review.reviewedAt)) === localDayKey(now));
+    return {
+      ...current,
+      grammarExercises: current.grammarExercises.map((item) => item.id === exercise.id ? { ...item, card: firstReviewToday ? schedule(item.card, grade, now) : item.card } : item),
+      grammarReviews: [...current.grammarReviews, { id: crypto.randomUUID(), exerciseId: exercise.id, rating: grade, reviewedAt: now.toISOString() }],
+    };
+  });
 
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto grid min-h-screen max-w-[1500px] grid-cols-1 lg:grid-cols-[240px_1fr]">
         <aside className="hidden border-r border-border/80 bg-card/55 px-5 py-6 backdrop-blur lg:flex lg:flex-col">
           <button onClick={() => setView('today')} className="flex items-center gap-3 px-2 text-left"><span className="grid size-10 place-items-center rounded-2xl bg-primary text-lg font-bold text-white">7</span><span><strong className="block font-heading text-xl leading-none">Sema 7</strong><span className="text-xs text-muted-foreground">Mein Sprachweg</span></span></button>
-          <nav className="mt-12 space-y-1" aria-label="Hauptnavigation"><SideNav active={view === 'today'} icon={Sparkles} label="Heute" onClick={() => setView('today')} /><SideNav active={view === 'words'} icon={Library} label="Meine Wörter" onClick={() => setView('words')} /><SideNav active={view === 'progress'} icon={CalendarDays} label="Fortschritt" onClick={() => setView('progress')} /><SideNav active={view === 'settings'} icon={Settings2} label="Einstellungen" onClick={() => setView('settings')} /></nav>
+          <nav className="mt-12 space-y-1" aria-label="Hauptnavigation"><SideNav active={view === 'today'} icon={Sparkles} label="Heute" onClick={() => setView('today')} /><SideNav active={view === 'words'} icon={Library} label="Meine Wörter" onClick={() => setView('words')} /><SideNav active={view === 'grammar'} icon={BookOpenCheck} label="Grammatik" onClick={() => setView('grammar')} /><SideNav active={view === 'progress'} icon={CalendarDays} label="Fortschritt" onClick={() => setView('progress')} /><SideNav active={view === 'settings'} icon={Settings2} label="Einstellungen" onClick={() => setView('settings')} /></nav>
           <div className="mt-auto rounded-2xl border border-primary/15 bg-primary/6 p-4"><div className="mb-2 flex items-center gap-2 text-sm font-semibold"><Languages className="size-4 text-primary" /> Nächste Sprache</div><p className="text-xs leading-relaxed text-muted-foreground">Spanisch ist im Datenmodell bereits vorbereitet.</p></div>
         </aside>
         <section className="px-4 pb-28 pt-5 sm:px-8 lg:px-12 lg:pb-12 lg:pt-8">
-          <header className="mx-auto flex max-w-6xl items-center justify-between"><div><p className="text-xs capitalize text-muted-foreground lg:text-sm">{dateLabel()}</p><h1 className="font-heading text-2xl font-bold lg:text-3xl">{view === 'today' ? 'Karibu zurück' : view === 'words' ? 'Meine Wörter' : view === 'progress' ? 'Mein Fortschritt' : 'Einstellungen'}</h1></div><Button variant="outline" className="rounded-xl" onClick={() => setEditing('new')}><Plus /><span className="hidden sm:inline">Wort hinzufügen</span></Button></header>
+          <header className="mx-auto flex max-w-6xl items-center justify-between"><div><p className="text-xs capitalize text-muted-foreground lg:text-sm">{dateLabel()}</p><h1 className="font-heading text-2xl font-bold lg:text-3xl">{view === 'today' ? 'Karibu zurück' : view === 'words' ? 'Meine Wörter' : view === 'grammar' ? 'Grammatik & Sätze' : view === 'progress' ? 'Mein Fortschritt' : 'Einstellungen'}</h1></div><Button variant="outline" className="rounded-xl" onClick={() => setEditing('new')}><Plus /><span className="hidden sm:inline">Wort hinzufügen</span></Button></header>
           {view === 'today' && <Today snapshot={snapshot} words={words} due={due} learned={learned} todayCount={todayCount} onStart={openCurrentRound} onNewRound={createNewRound} onDiagnostic={() => setDiagnostic(true)} onWords={() => setView('words')} />}
-          {view === 'words' && <Words words={words} onEdit={setEditing} />}
+          {view === 'words' && <Words words={words} onSelect={setSelectedWord} />}
+          {view === 'grammar' && <GrammarHub exercises={snapshot.grammarExercises} words={words} onStart={setGrammarSession} onWord={setSelectedWord} />}
           {view === 'progress' && <ProgressPage snapshot={snapshot} words={words} learned={learned} />}
           {view === 'settings' && <Settings snapshot={snapshot} onChange={setSnapshot} onToast={setToast} />}
         </section>
       </div>
-      <nav className="fixed inset-x-3 bottom-3 z-30 grid grid-cols-4 rounded-2xl border bg-card/95 p-2 shadow-xl backdrop-blur lg:hidden" aria-label="Mobile Navigation">{([['today', Sparkles, 'Heute'], ['words', Library, 'Wörter'], ['progress', CalendarDays, 'Verlauf'], ['settings', Settings2, 'Mehr']] as const).map(([key, Icon, label]) => <button key={key} className={`mobile-nav ${view === key ? 'mobile-nav-active' : ''}`} onClick={() => setView(key)}><Icon /><span>{label}</span></button>)}</nav>
+      <nav className="fixed inset-x-3 bottom-3 z-30 grid grid-cols-5 rounded-2xl border bg-card/95 p-2 shadow-xl backdrop-blur lg:hidden" aria-label="Mobile Navigation">{([['today', Sparkles, 'Heute'], ['words', Library, 'Wörter'], ['grammar', BookOpenCheck, 'Grammatik'], ['progress', CalendarDays, 'Verlauf'], ['settings', Settings2, 'Mehr']] as const).map(([key, Icon, label]) => <button key={key} className={`mobile-nav ${view === key ? 'mobile-nav-active' : ''}`} onClick={() => setView(key)}><Icon /><span>{label}</span></button>)}</nav>
+      {selectedWord && <VocabularyDetail word={snapshot.vocabulary.find((word) => word.id === selectedWord.id) ?? selectedWord} exercises={snapshot.grammarExercises.filter((exercise) => exercise.vocabularyId === selectedWord.id)} onClose={() => setSelectedWord(null)} onEdit={() => { setEditing(selectedWord); setSelectedWord(null); }} onPractice={(items) => { setGrammarSession(items); setSelectedWord(null); }} />}
       {editing && <WordEditor item={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} onSave={(item) => { saveWord(item); setEditing(null); setToast('Vokabel gespeichert.'); }} onDelete={deleteWord} />}
       {session && <LearningSession key={session.nonce} words={session.words} roundNumber={snapshot.activeRound?.roundNumber ?? 1} onClose={() => setSession(null)} onReview={addReview} onRepeat={() => setSession({ ...session, nonce: Date.now() })} onNewRound={createNewRound} />}
+      {grammarSession && grammarSession.length > 0 && <GrammarPractice exercises={grammarSession} onClose={() => setGrammarSession(null)} onReview={addGrammarReview} />}
       {diagnostic && <Diagnostic words={words} onClose={() => setDiagnostic(false)} onFinish={(results) => { setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.map((word) => results[word.id] ? { ...word, card: schedule(word.card, results[word.id]) } : word), settings: { ...current.settings, diagnosticDone: true } })); setDiagnostic(false); setToast('Einstufung gespeichert.'); }} />}
       {toast && <div role="status" className="fixed bottom-24 left-1/2 z-[80] -translate-x-1/2 rounded-xl bg-[#123f3a] px-4 py-3 text-sm font-medium text-white shadow-xl lg:bottom-8">{toast}</div>}
     </main>
@@ -149,9 +174,9 @@ function Today({ snapshot, words, due, learned, todayCount, onStart, onNewRound,
   </>;
 }
 
-function Words({ words, onEdit }: { words: VocabularyItem[]; onEdit: (item: VocabularyItem) => void }) {
+function Words({ words, onSelect }: { words: VocabularyItem[]; onSelect: (item: VocabularyItem) => void }) {
   const [query, setQuery] = useState(''); const [category, setCategory] = useState('Alle'); const categories = ['Alle', ...Array.from(new Set(words.map((word) => word.category))).sort()]; const shown = words.filter((word) => (category === 'Alle' || word.category === category) && `${word.target} ${word.translation}`.toLowerCase().includes(query.toLowerCase()));
-  return <div className="mx-auto mt-7 max-w-6xl"><div className="mb-5 grid gap-3 sm:grid-cols-[1fr_auto]"><label className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground" /><Input className="pl-9" placeholder="Swahili oder Deutsch suchen …" value={query} onChange={(event) => setQuery(event.target.value)} /></label><select className="h-9 rounded-xl border bg-card px-3 text-sm" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((value) => <option key={value}>{value}</option>)}</select></div><p className="mb-3 text-sm text-muted-foreground">{shown.length} Vokabeln</p><div className="grid gap-3 md:grid-cols-2">{shown.map((word) => <button key={word.id} onClick={() => onEdit(word)} className="group rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"><div className="flex gap-3"><span className="grid size-10 place-items-center rounded-xl bg-primary/8 font-heading font-bold text-primary">{word.target[0]}</span><span className="flex-1"><span className="flex flex-wrap gap-2"><strong>{word.target}</strong>{word.needsReview && <span className="rounded-full bg-[#fff0d5] px-2 py-0.5 text-[10px] text-[#885f1e]">Prüfen</span>}</span><span className="block text-sm text-muted-foreground">{word.translation}</span><span className="mt-2 block text-[11px] text-primary">{word.category} · {word.card.reps ? `${word.card.reps}× geübt` : 'neu'}</span></span><Pencil className="size-4 text-muted-foreground" /></div></button>)}</div></div>;
+  return <div className="mx-auto mt-7 max-w-6xl"><div className="mb-5 grid gap-3 sm:grid-cols-[1fr_auto]"><label className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground" /><Input className="pl-9" placeholder="Swahili oder Deutsch suchen …" value={query} onChange={(event) => setQuery(event.target.value)} /></label><select className="h-9 rounded-xl border bg-card px-3 text-sm" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((value) => <option key={value}>{value}</option>)}</select></div><p className="mb-3 text-sm text-muted-foreground">{shown.length} Vokabeln · Anklicken für Details und Übungen</p><div className="grid gap-3 md:grid-cols-2">{shown.map((word) => <button key={word.id} onClick={() => onSelect(word)} className="group rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"><div className="flex gap-3"><span className="grid size-10 place-items-center rounded-xl bg-primary/8 font-heading font-bold text-primary">{word.target[0]}</span><span className="flex-1"><span className="flex flex-wrap gap-2"><strong>{word.target}</strong>{word.verification && <span className={`rounded-full px-2 py-0.5 text-[10px] ${word.verification.status === 'verified' ? 'bg-primary/8 text-primary' : 'bg-[#fff0d5] text-[#885f1e]'}`}>{word.verification.status === 'verified' ? 'Geprüft' : word.verification.status === 'corrected' ? 'Korrigiert' : 'Hinweis'}</span>}</span><span className="block text-sm text-muted-foreground">{word.translation}</span><span className="mt-2 block text-[11px] text-primary">{word.category}{word.lemma ? ` · ${word.lemma}` : ''} · {word.card.reps ? `${word.card.reps}× geübt` : 'neu'}</span></span><ArrowRight className="size-4 text-muted-foreground" /></div></button>)}</div></div>;
 }
 
 function ProgressPage({ snapshot, words, learned }: { snapshot: AppSnapshot; words: VocabularyItem[]; learned: number }) {

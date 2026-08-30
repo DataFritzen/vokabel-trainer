@@ -1,5 +1,6 @@
 import { newCard } from '@/lib/scheduler';
 import type { VocabularyItem } from '@/lib/types';
+import { auditVocabulary } from '@/lib/vocabulary-audit';
 
 type SeedRow = [string, string, string, string?, string?, string?];
 
@@ -58,6 +59,7 @@ const rows: SeedRow[] = [
   ['Uko wapi?', 'Wo bist du?', 'Unterwegs'],
   ['nipo / niko / nimo', 'ich bin da / an einem Ort / darin', 'Grammatik', '', '', 'po = genauer Ort, ko = allgemeiner Ort, mo = innen'],
   ['Subiri kidogo, narudi sasa hivi.', 'Warte kurz, ich komme gleich zurück.', 'Gespräch', '', '', 'subiri = warte, kidogo = ein wenig, narudi = ich kehre zurück'],
+  ['Habari ya jioni?', 'Guten Abend! / Wie geht es heute Abend?', 'Begrüßung', 'Habari ya jioni?', 'Guten Abend!', 'jioni = Abend'],
 ];
 
 const originalCorrections: Record<number, string> = {
@@ -70,7 +72,7 @@ const originalCorrections: Record<number, string> = {
 };
 
 export function createSeedVocabulary(now = new Date()): VocabularyItem[] {
-  return rows.map(([target, translation, category, exampleTarget, exampleTranslation, mnemonicSuggestion], index) => ({
+  return auditVocabulary(rows.map(([target, translation, category, exampleTarget, exampleTranslation, mnemonicSuggestion], index) => ({
     id: `sw-${String(index + 1).padStart(3, '0')}`,
     language: 'sw',
     target,
@@ -86,5 +88,5 @@ export function createSeedVocabulary(now = new Date()): VocabularyItem[] {
     card: newCard(now),
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
-  }));
+  })));
 }
