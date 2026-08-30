@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { getMedia } from '@/lib/db';
-import { ratingLabels } from '@/lib/scheduler';
+import { intervalLabel, ratingLabels } from '@/lib/scheduler';
 import type { VocabularyItem } from '@/lib/types';
 
 export type Grade = 1 | 2 | 3 | 4;
@@ -106,7 +106,8 @@ export function LearningSession({ words, onClose, onReview }: { words: Vocabular
                   <div className="mt-4 animate-in fade-in slide-in-from-bottom-2">
                     <div className={`rounded-2xl p-4 text-center ${roughlyCorrect ? 'bg-[#e4f4ec]' : 'bg-muted'}`}><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Lösung</p><strong className="mt-1 block text-xl">{current.word.translation}</strong>{current.word.exampleTarget && <p className="mt-3 text-sm"><span className="font-medium">{current.word.exampleTarget}</span><br /><span className="text-muted-foreground">{current.word.exampleTranslation}</span></p>}</div>
                     {(current.word.personalMnemonic || current.word.mnemonicSuggestion) && <div className="mt-3 rounded-2xl border border-[#ead4a4] bg-[#fff8e8] p-4 text-sm"><span className="mb-1 block text-xs font-semibold text-[#8d651d]">Eselsbrücke</span>{current.word.personalMnemonic || current.word.mnemonicSuggestion}</div>}
-                    <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">{([1, 2, 3, 4] as Grade[]).map((grade) => <Button key={grade} variant={grade === 3 ? 'default' : 'outline'} className="h-auto flex-col gap-0 rounded-xl py-2" onClick={() => rate(grade)}><span>{ratingLabels[grade].label}</span><span className="text-[10px] font-normal opacity-65">{ratingLabels[grade].hint}</span></Button>)}</div>
+                    <p className="mt-4 text-center text-xs text-muted-foreground">„Nochmal“ erscheint später in dieser Runde. Der nächste Tagestermin steht darunter.</p>
+                    <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">{([1, 2, 3, 4] as Grade[]).map((grade) => <Button key={grade} variant={grade === 3 ? 'default' : 'outline'} className="h-auto flex-col gap-0 rounded-xl py-2" onClick={() => rate(grade)}><span>{ratingLabels[grade].label}</span><span className="text-[10px] font-normal opacity-65">{grade === 1 ? `diese Runde · ${intervalLabel(current.word.card, grade)}` : intervalLabel(current.word.card, grade)}</span></Button>)}</div>
                   </div>
                 )}
               </div>

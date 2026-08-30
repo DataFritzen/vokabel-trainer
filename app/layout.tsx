@@ -3,7 +3,7 @@ import './globals.css';
 import { PwaRegister } from '@/components/pwa-register';
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.PUBLIC_SITE_URL ?? 'http://localhost:3000'),
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : 'http://localhost:3000')),
   title: 'Sema 7 – Mein persönlicher Sprachweg',
   description: 'Offlinefähiger persönlicher Vokabeltrainer für Swahili – sieben Lernschritte pro Runde.',
   manifest: '/manifest.webmanifest',

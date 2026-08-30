@@ -5,9 +5,11 @@ const scheduler = fsrs(generatorParameters({
   request_retention: 0.9,
   maximum_interval: 365,
   enable_fuzz: true,
-  enable_short_term: true,
-  learning_steps: ['1m', '10m'],
-  relearning_steps: ['10m'],
+  // Eine Sitzung wird in Lernrunden statt in Minuten organisiert. FSRS plant
+  // hier nur die langfristige Wiederholung in Tagen.
+  enable_short_term: false,
+  learning_steps: [],
+  relearning_steps: [],
 }));
 
 export function newCard(now = new Date()): SerializedCard {
@@ -39,9 +41,15 @@ export function isDue(card: SerializedCard, now = new Date()) {
   return new Date(card.due).getTime() <= now.getTime();
 }
 
+export function intervalLabel(card: SerializedCard, grade: 1 | 2 | 3 | 4, now = new Date()) {
+  const next = schedule(card, grade, now);
+  const days = Math.max(1, Math.ceil((new Date(next.due).getTime() - now.getTime()) / 86_400_000));
+  return days === 1 ? 'morgen' : `in ${days} Tagen`;
+}
+
 export const ratingLabels = {
-  1: { label: 'Nochmal', hint: '< 1 Min.' },
-  2: { label: 'Schwer', hint: 'anstrengend' },
-  3: { label: 'Gut', hint: 'gewusst' },
-  4: { label: 'Leicht', hint: 'sofort gewusst' },
+  1: { label: 'Nochmal' },
+  2: { label: 'Schwer' },
+  3: { label: 'Gut' },
+  4: { label: 'Leicht' },
 } as const;
