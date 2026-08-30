@@ -20,14 +20,23 @@ function dateLabel() {
   return new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
 }
 
+function localDayKey(date = new Date()) {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function reviewDayKey(review: AppSnapshot['reviews'][number]) {
+  return review.dayKey ?? review.reviewedAt.slice(0, 10);
+}
+
 function downloadJson(name: string, data: unknown) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
   const link = document.createElement('a'); link.href = url; link.download = name; link.click(); URL.revokeObjectURL(url);
 }
 
 function buildDailyRound(snapshot: AppSnapshot, words: VocabularyItem[], roundNumber: number) {
-  const dayKey = new Date().toISOString().slice(0, 10);
-  const reviews = snapshot.reviews.filter((review) => review.reviewedAt.startsWith(dayKey));
+  const dayKey = localDayKey();
+  const reviews = snapshot.reviews.filter((review) => reviewDayKey(review) === dayKey);
   const lastByWord = new Map<string, (typeof reviews)[number]>();
   for (const review of reviews) lastByWord.set(review.vocabularyId, review);
 
@@ -67,11 +76,11 @@ export function SemaApp() {
   const words = snapshot.vocabulary.filter((word) => word.language === snapshot.settings.activeLanguage);
   const due = words.filter((word) => isDue(word.card)).length;
   const learned = words.filter((word) => word.card.state === 2 && word.card.reps >= 2).length;
-  const todayKey = new Date().toISOString().slice(0, 10);
-  const todayCount = snapshot.reviews.filter((review) => review.reviewedAt.startsWith(todayKey)).length;
+  const todayKey = localDayKey();
+  const todayCount = snapshot.reviews.filter((review) => reviewDayKey(review) === todayKey).length;
 
   const openCurrentRound = () => {
-    const dayKey = new Date().toISOString().slice(0, 10);
+    const dayKey = localDayKey();
     const active = snapshot.activeRound?.dayKey === dayKey && snapshot.activeRound.language === snapshot.settings.activeLanguage ? snapshot.activeRound : undefined;
     if (active) {
       const selected = active.vocabularyIds.map((id) => words.find((word) => word.id === id)).filter((word): word is VocabularyItem => Boolean(word));
@@ -80,7 +89,7 @@ export function SemaApp() {
     createNewRound();
   };
   const createNewRound = () => {
-    const dayKey = new Date().toISOString().slice(0, 10);
+    const dayKey = localDayKey();
     const roundNumber = snapshot.activeRound?.dayKey === dayKey ? snapshot.activeRound.roundNumber + 1 : 1;
     const selected = buildDailyRound(snapshot, words, roundNumber);
     setSnapshot({ ...snapshot, activeRound: { dayKey, language: snapshot.settings.activeLanguage, vocabularyIds: selected.map((word) => word.id), roundNumber } });
@@ -91,12 +100,12 @@ export function SemaApp() {
   const addReview = (item: VocabularyItem, grade: Grade) => setSnapshot((current) => {
     if (!current) return current;
     const now = new Date();
-    const dayKey = now.toISOString().slice(0, 10);
-    const firstReviewToday = !current.reviews.some((review) => review.vocabularyId === item.id && review.reviewedAt.startsWith(dayKey));
+    const dayKey = localDayKey(now);
+    const firstReviewToday = !current.reviews.some((review) => review.vocabularyId === item.id && reviewDayKey(review) === dayKey);
     return {
       ...current,
       vocabulary: current.vocabulary.map((word) => word.id === item.id ? { ...word, card: firstReviewToday ? schedule(word.card, grade, now) : word.card, updatedAt: now.toISOString() } : word),
-      reviews: [...current.reviews, { id: crypto.randomUUID(), vocabularyId: item.id, rating: grade, reviewedAt: now.toISOString(), roundNumber: current.activeRound?.roundNumber, wasNew: firstReviewToday && item.card.reps === 0 }],
+      reviews: [...current.reviews, { id: crypto.randomUUID(), vocabularyId: item.id, rating: grade, reviewedAt: now.toISOString(), dayKey, roundNumber: current.activeRound?.roundNumber, wasNew: firstReviewToday && item.card.reps === 0 }],
     };
   });
 
@@ -133,7 +142,7 @@ function Today({ snapshot, words, due, learned, todayCount, onStart, onNewRound,
   return <>
     {!snapshot.settings.diagnosticDone && <button onClick={onDiagnostic} className="mx-auto mt-6 flex w-full max-w-6xl items-center gap-3 rounded-2xl border border-[#d5b06b]/40 bg-[#fff4d9] p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#efc16c]/30"><CircleAlert className="size-5 text-[#8b621a]" /></span><span className="flex-1"><strong className="block text-sm">Kurze Einstufung empfohlen</strong><span className="text-xs text-muted-foreground">Zeig Sema 7, was du schon kannst.</span></span><ArrowRight className="size-4" /></button>}
     <div className="mx-auto mt-6 grid max-w-6xl gap-6 xl:grid-cols-[1.35fr_.65fr]">
-      <Card className="relative min-h-[430px] overflow-hidden border-0 bg-[linear-gradient(145deg,#123f3a_0%,#17665c_58%,#d6755c_145%)] text-white shadow-[0_28px_70px_rgba(20,66,61,.23)] ring-0"><div className="absolute right-[-70px] top-[-90px] size-72 rounded-full border-[42px] border-white/5" /><CardHeader className="relative p-6 sm:p-8"><div className="flex items-start justify-between"><div><p className="mb-3 text-xs font-semibold uppercase tracking-[.2em] text-white/65">Deine Runde heute{snapshot.activeRound?.dayKey === new Date().toISOString().slice(0, 10) ? ` · Runde ${snapshot.activeRound.roundNumber}` : ''}</p><CardTitle className="font-heading text-4xl font-bold sm:text-5xl">7 kleine Schritte.<br />Ein echtes Gespräch.</CardTitle></div><span className="grid size-12 place-items-center rounded-2xl bg-white/12"><Flame className="text-[#ffd19e]" /></span></div></CardHeader><CardContent className="relative p-6 pt-0 sm:p-8 sm:pt-0"><div className="mb-7 grid grid-cols-3 gap-3"><div className="metric"><strong>{todayCount}</strong><span>Antworten heute</span></div><div className="metric"><strong>{words.length}</strong><span>im Wortschatz</span></div><div className="metric"><strong>{learned}</strong><span>sicher gelernt</span></div></div><div className="mb-3 flex justify-between text-xs text-white/75"><span>{due} Karten langfristig fällig</span><span>{snapshot.activeRound?.vocabularyIds.length ?? 0} fest ausgewählt</span></div><Progress value={Math.min(100, todayCount / 35 * 100)} className="mb-7 [&_[data-slot=progress-track]]:bg-white/15 [&_[data-slot=progress-indicator]]:bg-[#ffc081]" /><div className="flex flex-col gap-2 sm:flex-row"><Button onClick={onStart} className="h-12 rounded-xl bg-[#ffd09d] text-[#173e39] hover:bg-[#ffe0bc]">{snapshot.activeRound?.dayKey === new Date().toISOString().slice(0, 10) ? 'Runde wiederholen' : 'Erste Runde starten'} <ArrowRight /></Button><Button onClick={onNewRound} variant="outline" className="h-12 rounded-xl border-white/25 bg-white/5 text-white hover:bg-white/15 hover:text-white">Neue Runde</Button></div><p className="mt-3 text-xs text-white/60">Die sieben Karten bleiben fest, bis du ausdrücklich „Neue Runde“ wählst.</p></CardContent></Card>
+      <Card className="relative min-h-[430px] overflow-hidden border-0 bg-[linear-gradient(145deg,#123f3a_0%,#17665c_58%,#d6755c_145%)] text-white shadow-[0_28px_70px_rgba(20,66,61,.23)] ring-0"><div className="absolute right-[-70px] top-[-90px] size-72 rounded-full border-[42px] border-white/5" /><CardHeader className="relative p-6 sm:p-8"><div className="flex items-start justify-between"><div><p className="mb-3 text-xs font-semibold uppercase tracking-[.2em] text-white/65">Deine Runde heute{snapshot.activeRound?.dayKey === localDayKey() ? ` · Runde ${snapshot.activeRound.roundNumber}` : ''}</p><CardTitle className="font-heading text-4xl font-bold sm:text-5xl">7 kleine Schritte.<br />Ein echtes Gespräch.</CardTitle></div><span className="grid size-12 place-items-center rounded-2xl bg-white/12"><Flame className="text-[#ffd19e]" /></span></div></CardHeader><CardContent className="relative p-6 pt-0 sm:p-8 sm:pt-0"><div className="mb-7 grid grid-cols-3 gap-3"><div className="metric"><strong>{todayCount}</strong><span>Antworten heute</span></div><div className="metric"><strong>{words.length}</strong><span>im Wortschatz</span></div><div className="metric"><strong>{learned}</strong><span>sicher gelernt</span></div></div><div className="mb-3 flex justify-between text-xs text-white/75"><span>{due} Karten langfristig fällig</span><span>{snapshot.activeRound?.vocabularyIds.length ?? 0} fest ausgewählt</span></div><Progress value={Math.min(100, todayCount / 35 * 100)} className="mb-7 [&_[data-slot=progress-track]]:bg-white/15 [&_[data-slot=progress-indicator]]:bg-[#ffc081]" /><div className="flex flex-col gap-2 sm:flex-row"><Button onClick={onStart} className="h-12 rounded-xl bg-[#ffd09d] text-[#173e39] hover:bg-[#ffe0bc]">{snapshot.activeRound?.dayKey === localDayKey() ? 'Runde wiederholen' : 'Erste Runde starten'} <ArrowRight /></Button><Button onClick={onNewRound} variant="outline" className="h-12 rounded-xl border-white/25 bg-white/5 text-white hover:bg-white/15 hover:text-white">Neue Runde</Button></div><p className="mt-3 text-xs text-white/60">Die sieben Karten bleiben fest, bis du ausdrücklich „Neue Runde“ wählst.</p></CardContent></Card>
       <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-1">{focus && <Card className="border-0 bg-card shadow-lg ring-border/70"><CardHeader><div className="mb-4 flex items-center justify-between"><span className="grid size-10 place-items-center rounded-xl bg-[#fff0e7] text-[#ba5b45]"><BookOpenText /></span><span className="rounded-full bg-muted px-3 py-1 text-xs">Aus deiner Liste</span></div><CardDescription>Wort des Tages</CardDescription><CardTitle className="font-heading text-3xl text-primary">{focus.target}</CardTitle></CardHeader><CardContent><p>{focus.translation}</p>{focus.morphemes && <div className="mt-4 flex gap-1.5">{focus.morphemes.map((part) => <span key={part} className="rounded-lg bg-muted px-2.5 py-1 font-mono text-xs">{part}</span>)}</div>}<Button variant="outline" className="mt-5 rounded-xl" onClick={speak}><Volume2 /> Aussprache</Button></CardContent></Card>}<Card className="border-0 bg-[#fbf2db] ring-[#e8d7ae]"><CardHeader><span className="mb-3 grid size-10 place-items-center rounded-xl bg-white/70 text-[#9b6c20]"><Mic2 /></span><CardTitle className="font-heading text-xl">Hören & nachsprechen</CardTitle><CardDescription>Gerätestimme, eigene Aufnahme oder hochgeladenes KI-Audio – lokal auf deinem Gerät.</CardDescription></CardHeader><CardContent className="flex gap-2 text-xs text-[#806c48]"><Headphones className="size-4" /> Im Vokabel-Editor verfügbar</CardContent></Card></div>
     </div>
     <section className="mx-auto mt-8 max-w-6xl"><div className="mb-4 flex items-end justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Dein Fundament</p><h2 className="font-heading text-2xl font-bold">Als Nächstes</h2></div><Button variant="ghost" onClick={onWords}>Alle {words.length} ansehen <ArrowRight /></Button></div><div className="grid gap-3 md:grid-cols-3">{words.slice(0, 3).map((word) => <Card key={word.id} size="sm" className="border-0 bg-card ring-border/70"><CardContent className="flex items-center justify-between py-1"><div><strong className="block">{word.target}</strong><span className="text-sm text-muted-foreground">{word.translation}</span></div><span className="rounded-full bg-secondary px-2.5 py-1 text-xs">{word.card.reps ? 'Lernen' : 'Neu'}</span></CardContent></Card>)}</div></section>
@@ -146,7 +155,7 @@ function Words({ words, onEdit }: { words: VocabularyItem[]; onEdit: (item: Voca
 }
 
 function ProgressPage({ snapshot, words, learned }: { snapshot: AppSnapshot; words: VocabularyItem[]; learned: number }) {
-  const days = Array.from({ length: 7 }, (_, i) => { const date = new Date(); date.setDate(date.getDate() - 6 + i); const key = date.toISOString().slice(0, 10); return { label: new Intl.DateTimeFormat('de-DE', { weekday: 'short' }).format(date), count: snapshot.reviews.filter((review) => review.reviewedAt.startsWith(key)).length }; }); const max = Math.max(7, ...days.map((day) => day.count));
+  const days = Array.from({ length: 7 }, (_, i) => { const date = new Date(); date.setDate(date.getDate() - 6 + i); const key = localDayKey(date); return { label: new Intl.DateTimeFormat('de-DE', { weekday: 'short' }).format(date), count: snapshot.reviews.filter((review) => reviewDayKey(review) === key).length }; }); const max = Math.max(7, ...days.map((day) => day.count));
   return <div className="mx-auto mt-7 max-w-6xl"><div className="grid gap-4 sm:grid-cols-3"><Stat value={snapshot.reviews.length} label="Antworten insgesamt" /><Stat value={learned} label="sicher gelernt" /><Stat value={words.filter((word) => isDue(word.card)).length} label="heute fällig" /></div><Card className="mt-6 border-0 bg-card ring-border/70"><CardHeader><CardTitle className="font-heading text-2xl">Die letzten 7 Tage</CardTitle><CardDescription>Jede Antwort zählt – auch „Nochmal“ ist echter Fortschritt.</CardDescription></CardHeader><CardContent><div className="flex h-52 items-end gap-3">{days.map((day) => <div key={day.label} className="flex flex-1 flex-col items-center gap-2"><span className="text-xs font-semibold">{day.count}</span><div className="w-full max-w-14 rounded-t-xl bg-primary" style={{ height: `${Math.max(8, day.count / max * 150)}px` }} /><span className="text-xs text-muted-foreground">{day.label}</span></div>)}</div></CardContent></Card></div>;
 }
 

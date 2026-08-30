@@ -39,6 +39,7 @@ export type ReviewEntry = {
   vocabularyId: string;
   rating: 1 | 2 | 3 | 4;
   reviewedAt: string;
+  dayKey?: string;
   roundNumber?: number;
   wasNew?: boolean;
 };
