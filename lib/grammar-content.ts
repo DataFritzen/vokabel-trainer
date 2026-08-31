@@ -2,6 +2,7 @@ import { newCard } from '@/lib/scheduler';
 import type { GrammarExercise, GrammarLesson, VocabularyItem } from '@/lib/types';
 
 export const grammarLessons: GrammarLesson[] = [
+  { id: 'salamu', level: 'A1', title: 'Begrüßung als Gespräch', summary: 'Swahili-Begrüßungen bestehen häufig aus Frage und passender Antwort; Alter und Anzahl beeinflussen die Form.', formula: 'Gruß + passende Antwort + mögliche Anschlussfrage', example: 'Hujambo? — Sijambo. · Shikamoo. — Marahaba.' },
   { id: 'verbaufbau', level: 'A1', title: 'Der Swahili-Verbzug', summary: 'Ein einziges Verb trägt Subjekt, Zeit und manchmal sogar das Objekt.', formula: 'Subjekt + Zeit + Objekt + Stamm + Endung', example: 'ni-na-ku-on-a → ich sehe dich' },
   { id: 'praesens', level: 'A1', title: 'Präsens mit -na-', summary: 'Die Person steht vor dem Zeitmarker -na-. In der 1. Person hört man daneben häufig eine kürzere allgemeine Form.', formula: 'ni/u/a/tu/m/wa + na + Stamm + a', example: 'Ninakula. · Unakula. · Tunakula.' },
   { id: 'negation', level: 'A1', title: 'Präsens verneinen', summary: 'Der positive Subjektmarker wird negativ, -na- fällt weg und bei regulären Verben wird -a zu -i.', formula: 'si/hu/ha/hatu/ham/hawa + Stamm + i', example: 'Ninapenda chai. → Sipendi chai.' },
@@ -63,6 +64,15 @@ export function grammarExercisesForVocabulary(word: VocabularyItem, now = new Da
 
 export function createGrammarExercises(words: VocabularyItem[], now = new Date()): GrammarExercise[] {
   const wordExercises = words.flatMap((word) => grammarExercisesForVocabulary(word, now));
+  const greetingExercises: GrammarExercise[] = [
+    { id: 'pack-a1-greetings-habari', lessonId: 'salamu', vocabularyId: 'sw-056', kind: 'sentence', title: 'Auf Habari antworten', prompt: 'Antworte höflich auf: „Habari?“', answer: 'Nzuri, asante.', alternatives: ['nzuri', 'salama', 'salama, asante'], hint: 'Gut + danke', explanation: 'Habari fragt nach Neuigkeiten oder dem Befinden. Nzuri, asante ist eine sichere kurze Antwort.', card: newCard(now) },
+    { id: 'pack-a1-greetings-jambo', lessonId: 'salamu', vocabularyId: 'sw-057', kind: 'transform', title: 'Die passende Ich-Antwort', prompt: 'Wie antwortest du auf „Hujambo?“', answer: 'Sijambo.', alternatives: ['sijambo'], hint: 'Die Antwort beginnt mit si-.', explanation: 'hu- richtet die jambo-Form an „du“; si- antwortet für „ich“.', card: newCard(now) },
+    { id: 'pack-a1-greetings-shikamoo', lessonId: 'salamu', vocabularyId: 'sw-058', kind: 'sentence', title: 'Respektvoll antworten', prompt: 'Eine jüngere Person sagt „Shikamoo“. Wie antwortet die ältere Person?', answer: 'Marahaba.', alternatives: ['marahaba'], hint: 'Diese Antwort gehört fest zu Shikamoo.', explanation: 'Shikamoo und Marahaba bilden ein kulturell festes Paar.', card: newCard(now) },
+    { id: 'pack-a1-greetings-asante', lessonId: 'salamu', vocabularyId: 'sw-059', kind: 'build', title: 'Dank verstärken', prompt: 'Bilde: „Vielen Dank.“', answer: 'Asante sana.', alternatives: ['asante sana'], hint: 'sana = sehr', explanation: 'Asante heißt danke; sana verstärkt den Dank.', card: newCard(now) },
+    { id: 'pack-a1-greetings-tafadhali', lessonId: 'salamu', vocabularyId: 'sw-060', kind: 'sentence', title: 'Höflich bestellen', prompt: 'Bilde: „Wasser, bitte.“', answer: 'Maji, tafadhali.', alternatives: ['maji tafadhali'], hint: 'Bitte steht hier nach dem Wunsch.', explanation: 'Tafadhali macht die Bitte höflich.', card: newCard(now) },
+    { id: 'pack-a1-greetings-samahani', lessonId: 'salamu', vocabularyId: 'sw-061', kind: 'build', title: 'Höflich ansprechen', prompt: 'Welches Wort eröffnet höflich eine Entschuldigung oder Frage?', answer: 'Samahani.', alternatives: ['samahani'], hint: 'Nicht pole: Gesucht ist „Entschuldigung“.', explanation: 'Samahani entschuldigt oder bittet höflich um Aufmerksamkeit; pole drückt oft Mitgefühl aus.', card: newCard(now) },
+    { id: 'pack-a1-greetings-karibuni', lessonId: 'salamu', vocabularyId: 'sw-062', kind: 'transform', title: 'Eine oder mehrere Personen', prompt: 'Setze „Karibu!“ in die Form für mehrere Personen.', answer: 'Karibuni!', alternatives: ['karibuni'], hint: 'Füge die Mehrzahlendung -ni an.', explanation: 'Karibu gilt für eine Person, Karibuni für mehrere.', card: newCard(now) },
+  ];
   const general: GrammarExercise[] = [
     { id: 'general-verbzug', lessonId: 'verbaufbau', kind: 'analyze', title: 'Verb zerlegen', prompt: 'Zerlege „ninakuona“ mit Bindestrichen.', answer: 'ni-na-ku-on-a', alternatives: ['ni-na-ku-ona'], hint: 'ich + Präsens + dich + sehen + Endung', explanation: 'ni- = ich, -na- = Präsens, -ku- = dich, -on- = sehen, -a = Endvokal.', card: newCard(now) },
     { id: 'general-present', lessonId: 'praesens', kind: 'build', title: 'Präsens bilden', prompt: 'Bilde: „Wir essen Reis.“', answer: 'Tunakula wali.', alternatives: ['tunakula wali'], hint: 'tu + na + kula', explanation: 'tu- markiert „wir“, -na- das Präsens.', card: newCard(now) },
@@ -72,5 +82,5 @@ export function createGrammarExercises(words: VocabularyItem[], now = new Date()
     { id: 'general-tenses', lessonId: 'zeiten', kind: 'transform', title: 'In die Zukunft setzen', prompt: 'Setze „Ninapika.“ in die Zukunft.', answer: 'Nitapika.', alternatives: ['nitapika'], hint: 'Ersetze -na- durch -ta-.', explanation: '-ta- ist der Zukunftsmarker.', card: newCard(now) },
     { id: 'general-place', lessonId: 'ort', kind: 'build', title: 'Ort ausdrücken', prompt: 'Bilde: „Ich bin hier.“', answer: 'Nipo hapa.', alternatives: ['niko hapa'], hint: 'Für einen konkreten Ort: -po.', explanation: 'Nipo hapa bezeichnet einen konkreten Ort. Niko hapa wird ebenfalls verwendet, ist aber weniger spezifisch.', card: newCard(now) },
   ];
-  return [...general, ...wordExercises];
+  return [...general, ...greetingExercises, ...wordExercises];
 }

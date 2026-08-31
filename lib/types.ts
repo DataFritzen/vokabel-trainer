@@ -27,6 +27,23 @@ export type VocabularyItem = {
   notes?: string;
   sourceText?: string;
   needsReview?: boolean;
+  learningStatus?: 'active' | 'archived';
+  cefrLevel?: 'A1' | 'A2' | 'B1';
+  learningPackId?: string;
+  responseTarget?: string;
+  responseTranslation?: string;
+  nounClass?: string;
+  languageGuidance?: {
+    standard: string;
+    why: string;
+    commonMistake: string;
+    register: 'neutral' | 'polite' | 'respectful' | 'informal';
+    localUsage: string;
+    regionalStatus: 'standard-safe' | 'local-verified' | 'local-review';
+    useMode: 'active' | 'recognition';
+    sourceLabel: string;
+    sourceUrl: string;
+  };
   partOfSpeech?: 'verb' | 'noun' | 'pronoun' | 'phrase' | 'adverb' | 'other';
   lemma?: string;
   verbProfileId?: string;
@@ -74,6 +91,16 @@ export type GrammarLesson = {
   example: string;
 };
 
+export type LearningPack = {
+  id: string;
+  level: 'A1' | 'A2' | 'B1';
+  order: number;
+  title: string;
+  goal: string;
+  vocabularyIds: string[];
+  prerequisiteIds: string[];
+};
+
 export type GrammarReviewEntry = {
   id: string;
   exerciseId: string;
@@ -111,8 +138,9 @@ export type AppSettings = {
 };
 
 export type AppSnapshot = {
-  version: 2;
+  version: 3;
   vocabulary: VocabularyItem[];
+  deletedVocabularyIds: string[];
   reviews: ReviewEntry[];
   grammarExercises: GrammarExercise[];
   grammarReviews: GrammarReviewEntry[];

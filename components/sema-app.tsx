@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, BookOpenCheck, BookOpenText, CalendarDays, Check, CircleAlert, Download, Flame, Headphones, Languages, Library, Mic2, Plus, Search, Settings2, Sparkles, Upload, Volume2 } from 'lucide-react';
+import { ArchiveRestore, ArrowRight, BookOpenCheck, BookOpenText, CalendarDays, Check, CircleAlert, Download, Flame, Headphones, Languages, Library, Mic2, Plus, Search, Settings2, Sparkles, Upload, Volume2 } from 'lucide-react';
 
 import { GrammarHub } from '@/components/grammar-hub';
 import { GrammarPractice } from '@/components/grammar-practice';
@@ -13,8 +13,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import { learningPacks } from '@/lib/curriculum';
 import { createBackup, loadSnapshot, restoreBackup, saveSnapshot } from '@/lib/db';
 import { grammarExercisesForVocabulary } from '@/lib/grammar-content';
+import { learningStage, learningStageMeta } from '@/lib/learning-status';
 import { isDue, schedule } from '@/lib/scheduler';
 import type { AppSnapshot, BackupFile, GrammarExercise, VocabularyItem } from '@/lib/types';
 
@@ -53,7 +55,7 @@ function buildDailyRound(snapshot: AppSnapshot, words: VocabularyItem[], roundNu
 
   const score = (word: VocabularyItem) => {
     const review = lastByWord.get(word.id);
-    if (!review) return (word.card.reps > 0 && isDue(word.card) ? 500 : 400) - (activeIds.has(word.id) ? 20 : 0);
+    if (!review) return (word.card.reps > 0 && isDue(word.card) ? 500 : word.learningPackId === 'a1-greetings' && word.card.reps === 0 ? 460 : 400) - (activeIds.has(word.id) ? 20 : 0);
     const roundsSince = roundNumber - (review.roundNumber ?? roundNumber - 1);
     if (review.rating === 1) return roundsSince >= 1 ? 700 : 0;
     if (review.rating === 2) return roundsSince >= 1 ? 620 : 0;
@@ -80,9 +82,12 @@ export function SemaApp() {
 
   if (!snapshot) return <main className="grid min-h-screen place-items-center bg-background text-foreground"><div className="text-center"><span className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-primary text-xl font-bold text-white">7</span><p className="text-sm text-muted-foreground">Dein Sprachweg wird geladen …</p></div></main>;
 
-  const words = snapshot.vocabulary.filter((word) => word.language === snapshot.settings.activeLanguage);
+  const words = snapshot.vocabulary.filter((word) => word.language === snapshot.settings.activeLanguage && word.learningStatus !== 'archived');
+  const archivedWords = snapshot.vocabulary.filter((word) => word.language === snapshot.settings.activeLanguage && word.learningStatus === 'archived');
+  const activeWordIds = new Set(words.map((word) => word.id));
+  const activeGrammarExercises = snapshot.grammarExercises.filter((exercise) => !exercise.vocabularyId || activeWordIds.has(exercise.vocabularyId));
   const due = words.filter((word) => isDue(word.card)).length;
-  const learned = words.filter((word) => word.card.state === 2 && word.card.reps >= 2).length;
+  const learned = words.filter((word) => learningStage(word) === 'safe').length;
   const todayKey = localDayKey();
   const todayCount = snapshot.reviews.filter((review) => reviewDayKey(review) === todayKey).length;
 
@@ -91,7 +96,7 @@ export function SemaApp() {
     const active = snapshot.activeRound?.dayKey === dayKey && snapshot.activeRound.language === snapshot.settings.activeLanguage ? snapshot.activeRound : undefined;
     if (active) {
       const selected = active.vocabularyIds.map((id) => words.find((word) => word.id === id)).filter((word): word is VocabularyItem => Boolean(word));
-      if (selected.length) { setSession({ words: selected, nonce: Date.now() }); return; }
+      if (selected.length) { setSession({ words: selected, nonce: active.roundNumber }); return; }
     }
     createNewRound();
   };
@@ -100,7 +105,17 @@ export function SemaApp() {
     const roundNumber = snapshot.activeRound?.dayKey === dayKey ? snapshot.activeRound.roundNumber + 1 : 1;
     const selected = buildDailyRound(snapshot, words, roundNumber);
     setSnapshot({ ...snapshot, activeRound: { dayKey, language: snapshot.settings.activeLanguage, vocabularyIds: selected.map((word) => word.id), roundNumber } });
-    setSession({ words: selected, nonce: Date.now() });
+    setSession({ words: selected, nonce: roundNumber });
+  };
+  const startLearningPack = (packId: string) => {
+    const pack = learningPacks.find((item) => item.id === packId);
+    if (!pack) return;
+    const selected = pack.vocabularyIds.map((id) => words.find((word) => word.id === id)).filter((word): word is VocabularyItem => Boolean(word));
+    if (!selected.length) { setToast('Die Wörter dieses Pakets wurden aus dem Lernplan entfernt.'); return; }
+    const dayKey = localDayKey();
+    const roundNumber = snapshot.activeRound?.dayKey === dayKey ? snapshot.activeRound.roundNumber + 1 : 1;
+    setSnapshot({ ...snapshot, activeRound: { dayKey, language: snapshot.settings.activeLanguage, vocabularyIds: selected.map((word) => word.id), roundNumber } });
+    setSession({ words: selected, nonce: roundNumber });
   };
   const saveWord = (item: VocabularyItem) => setSnapshot((current) => {
     if (!current) return current;
@@ -109,7 +124,9 @@ export function SemaApp() {
     const storedById = new Map(current.grammarExercises.map((exercise) => [exercise.id, exercise]));
     return { ...current, vocabulary, grammarExercises: [...current.grammarExercises.filter((exercise) => exercise.vocabularyId !== item.id), ...refreshed.map((exercise) => ({ ...exercise, card: storedById.get(exercise.id)?.card ?? exercise.card }))] };
   });
-  const deleteWord = (id: string) => { if (!window.confirm('Diese Vokabel wirklich löschen?')) return; setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.filter((word) => word.id !== id), grammarExercises: current.grammarExercises.filter((exercise) => exercise.vocabularyId !== id) })); setEditing(null); setSelectedWord(null); };
+  const deleteWord = (id: string) => { if (!window.confirm('Diese Vokabel wirklich dauerhaft löschen? Ihr Lernstand und ihre Übungen werden ebenfalls entfernt.')) return; setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.filter((word) => word.id !== id), deletedVocabularyIds: Array.from(new Set([...current.deletedVocabularyIds, id])), grammarExercises: current.grammarExercises.filter((exercise) => exercise.vocabularyId !== id), activeRound: current.activeRound ? { ...current.activeRound, vocabularyIds: current.activeRound.vocabularyIds.filter((wordId) => wordId !== id) } : undefined })); setEditing(null); setSelectedWord(null); setToast('Vokabel dauerhaft gelöscht.'); };
+  const archiveWord = (id: string) => { setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.map((word) => word.id === id ? { ...word, learningStatus: 'archived', updatedAt: new Date().toISOString() } : word), activeRound: current.activeRound ? { ...current.activeRound, vocabularyIds: current.activeRound.vocabularyIds.filter((wordId) => wordId !== id) } : undefined })); setSelectedWord(null); setToast('Vokabel aus dem Lernplan entfernt.'); };
+  const restoreWord = (id: string) => { setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.map((word) => word.id === id ? { ...word, learningStatus: 'active', updatedAt: new Date().toISOString() } : word) })); setToast('Vokabel wieder in den Lernplan aufgenommen.'); };
   const addReview = (item: VocabularyItem, grade: Grade) => setSnapshot((current) => {
     if (!current) return current;
     const now = new Date();
@@ -142,28 +159,31 @@ export function SemaApp() {
         </aside>
         <section className="px-4 pb-28 pt-5 sm:px-8 lg:px-12 lg:pb-12 lg:pt-8">
           <header className="mx-auto flex max-w-6xl items-center justify-between"><div><p className="text-xs capitalize text-muted-foreground lg:text-sm">{dateLabel()}</p><h1 className="font-heading text-2xl font-bold lg:text-3xl">{view === 'today' ? 'Karibu zurück' : view === 'words' ? 'Meine Wörter' : view === 'grammar' ? 'Grammatik & Sätze' : view === 'progress' ? 'Mein Sprachprofil' : 'Einstellungen'}</h1></div><Button variant="outline" className="rounded-xl" onClick={() => setEditing('new')}><Plus /><span className="hidden sm:inline">Wort hinzufügen</span></Button></header>
-          {view === 'today' && <Today snapshot={snapshot} words={words} due={due} learned={learned} todayCount={todayCount} onStart={openCurrentRound} onNewRound={createNewRound} onDiagnostic={() => setDiagnostic(true)} onWords={() => setView('words')} />}
-          {view === 'words' && <Words words={words} onSelect={setSelectedWord} />}
-          {view === 'grammar' && <GrammarHub exercises={snapshot.grammarExercises} words={words} onStart={setGrammarSession} onWord={setSelectedWord} />}
+          {view === 'today' && <Today snapshot={snapshot} words={words} due={due} learned={learned} todayCount={todayCount} onStart={openCurrentRound} onNewRound={createNewRound} onStartPack={startLearningPack} onDiagnostic={() => setDiagnostic(true)} onWords={() => setView('words')} />}
+          {view === 'words' && <Words words={words} archivedWords={archivedWords} onSelect={setSelectedWord} onRestore={restoreWord} />}
+          {view === 'grammar' && <GrammarHub exercises={activeGrammarExercises} words={words} onStart={setGrammarSession} onWord={setSelectedWord} />}
           {view === 'progress' && <ProfileDashboard snapshot={snapshot} words={words} />}
           {view === 'settings' && <Settings snapshot={snapshot} onChange={setSnapshot} onToast={setToast} />}
         </section>
       </div>
       <nav className="fixed inset-x-3 bottom-3 z-30 grid grid-cols-5 rounded-2xl border bg-card/95 p-2 shadow-xl backdrop-blur lg:hidden" aria-label="Mobile Navigation">{([['today', Sparkles, 'Heute'], ['words', Library, 'Wörter'], ['grammar', BookOpenCheck, 'Grammatik'], ['progress', CalendarDays, 'Profil'], ['settings', Settings2, 'Mehr']] as const).map(([key, Icon, label]) => <button key={key} className={`mobile-nav ${view === key ? 'mobile-nav-active' : ''}`} onClick={() => setView(key)}><Icon /><span>{label}</span></button>)}</nav>
-      {selectedWord && <VocabularyDetail word={snapshot.vocabulary.find((word) => word.id === selectedWord.id) ?? selectedWord} exercises={snapshot.grammarExercises.filter((exercise) => exercise.vocabularyId === selectedWord.id)} onClose={() => setSelectedWord(null)} onEdit={() => { setEditing(selectedWord); setSelectedWord(null); }} onPractice={(items) => { setGrammarSession(items); setSelectedWord(null); }} />}
+      {selectedWord && <VocabularyDetail word={snapshot.vocabulary.find((word) => word.id === selectedWord.id) ?? selectedWord} exercises={snapshot.grammarExercises.filter((exercise) => exercise.vocabularyId === selectedWord.id)} onClose={() => setSelectedWord(null)} onEdit={() => { setEditing(selectedWord); setSelectedWord(null); }} onPractice={(items) => { setGrammarSession(items); setSelectedWord(null); }} onArchive={() => archiveWord(selectedWord.id)} onDelete={() => deleteWord(selectedWord.id)} />}
       {editing && <WordEditor item={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} onSave={(item) => { saveWord(item); setEditing(null); setToast('Vokabel gespeichert.'); }} onDelete={deleteWord} />}
-      {session && <LearningSession key={session.nonce} words={session.words} roundNumber={snapshot.activeRound?.roundNumber ?? 1} onClose={() => setSession(null)} onReview={addReview} onRepeat={() => setSession({ ...session, nonce: Date.now() })} onNewRound={createNewRound} />}
+      {session && <LearningSession key={session.nonce} words={session.words} roundNumber={snapshot.activeRound?.roundNumber ?? 1} onClose={() => setSession(null)} onReview={addReview} onRepeat={() => setSession({ ...session, nonce: session.nonce + 1 })} onNewRound={createNewRound} />}
       {grammarSession && grammarSession.length > 0 && <GrammarPractice exercises={grammarSession} onClose={() => setGrammarSession(null)} onReview={addGrammarReview} />}
       {diagnostic && <Diagnostic words={words} onClose={() => setDiagnostic(false)} onFinish={(results) => { setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.map((word) => results[word.id] ? { ...word, card: schedule(word.card, results[word.id]) } : word), settings: { ...current.settings, diagnosticDone: true } })); setDiagnostic(false); setToast('Einstufung gespeichert.'); }} />}
-      {toast && <div role="status" className="fixed bottom-24 left-1/2 z-[80] -translate-x-1/2 rounded-xl bg-[#123f3a] px-4 py-3 text-sm font-medium text-white shadow-xl lg:bottom-8">{toast}</div>}
+      {toast && <output className="fixed bottom-24 left-1/2 z-[80] -translate-x-1/2 rounded-xl bg-[#123f3a] px-4 py-3 text-sm font-medium text-white shadow-xl lg:bottom-8">{toast}</output>}
     </main>
   );
 }
 
 function SideNav({ active, icon: Icon, label, onClick }: { active: boolean; icon: typeof Sparkles; label: string; onClick: () => void }) { return <button className={`nav-item w-full ${active ? 'nav-item-active' : ''}`} onClick={onClick}><Icon />{label}</button>; }
 
-function Today({ snapshot, words, due, learned, todayCount, onStart, onNewRound, onDiagnostic, onWords }: { snapshot: AppSnapshot; words: VocabularyItem[]; due: number; learned: number; todayCount: number; onStart: () => void; onNewRound: () => void; onDiagnostic: () => void; onWords: () => void }) {
+function Today({ snapshot, words, due, learned, todayCount, onStart, onNewRound, onStartPack, onDiagnostic, onWords }: { snapshot: AppSnapshot; words: VocabularyItem[]; due: number; learned: number; todayCount: number; onStart: () => void; onNewRound: () => void; onStartPack: (packId: string) => void; onDiagnostic: () => void; onWords: () => void }) {
   const focus = words.find((word) => word.target.includes('Ninakushukuru')) ?? words[0];
+  const firstPack = learningPacks[0];
+  const packWords = firstPack.vocabularyIds.map((id) => words.find((word) => word.id === id)).filter((word): word is VocabularyItem => Boolean(word));
+  const packPracticed = packWords.filter((word) => word.card.reps > 0).length;
   const speak = () => { if (!focus || !('speechSynthesis' in window)) return; const speech = new SpeechSynthesisUtterance(focus.target); speech.lang = 'sw-TZ'; speech.rate = .82; speechSynthesis.cancel(); speechSynthesis.speak(speech); };
   return <>
     {!snapshot.settings.diagnosticDone && <button onClick={onDiagnostic} className="mx-auto mt-6 flex w-full max-w-6xl items-center gap-3 rounded-2xl border border-[#d5b06b]/40 bg-[#fff4d9] p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#efc16c]/30"><CircleAlert className="size-5 text-[#8b621a]" /></span><span className="flex-1"><strong className="block text-sm">Kurze Einstufung empfohlen</strong><span className="text-xs text-muted-foreground">Zeig Sema 7, was du schon kannst.</span></span><ArrowRight className="size-4" /></button>}
@@ -171,13 +191,14 @@ function Today({ snapshot, words, due, learned, todayCount, onStart, onNewRound,
       <Card className="relative min-h-[430px] overflow-hidden border-0 bg-[linear-gradient(145deg,#123f3a_0%,#17665c_58%,#d6755c_145%)] text-white shadow-[0_28px_70px_rgba(20,66,61,.23)] ring-0"><div className="absolute right-[-70px] top-[-90px] size-72 rounded-full border-[42px] border-white/5" /><CardHeader className="relative p-6 sm:p-8"><div className="flex items-start justify-between"><div><p className="mb-3 text-xs font-semibold uppercase tracking-[.2em] text-white/65">Deine Runde heute{snapshot.activeRound?.dayKey === localDayKey() ? ` · Runde ${snapshot.activeRound.roundNumber}` : ''}</p><CardTitle className="font-heading text-4xl font-bold sm:text-5xl">7 kleine Schritte.<br />Ein echtes Gespräch.</CardTitle></div><span className="grid size-12 place-items-center rounded-2xl bg-white/12"><Flame className="text-[#ffd19e]" /></span></div></CardHeader><CardContent className="relative p-6 pt-0 sm:p-8 sm:pt-0"><div className="mb-7 grid grid-cols-3 gap-3"><div className="metric"><strong>{todayCount}</strong><span>Antworten heute</span></div><div className="metric"><strong>{words.length}</strong><span>im Wortschatz</span></div><div className="metric"><strong>{learned}</strong><span>sicher gelernt</span></div></div><div className="mb-3 flex justify-between text-xs text-white/75"><span>{due} Karten langfristig fällig</span><span>{snapshot.activeRound?.vocabularyIds.length ?? 0} fest ausgewählt</span></div><Progress value={Math.min(100, todayCount / 35 * 100)} className="mb-7 [&_[data-slot=progress-track]]:bg-white/15 [&_[data-slot=progress-indicator]]:bg-[#ffc081]" /><div className="flex flex-col gap-2 sm:flex-row"><Button onClick={onStart} className="h-12 rounded-xl bg-[#ffd09d] text-[#173e39] hover:bg-[#ffe0bc]">{snapshot.activeRound?.dayKey === localDayKey() ? 'Runde wiederholen' : 'Erste Runde starten'} <ArrowRight /></Button><Button onClick={onNewRound} variant="outline" className="h-12 rounded-xl border-white/25 bg-white/5 text-white hover:bg-white/15 hover:text-white">Neue Runde</Button></div><p className="mt-3 text-xs text-white/60">Die sieben Karten bleiben fest, bis du ausdrücklich „Neue Runde“ wählst.</p></CardContent></Card>
       <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-1">{focus && <Card className="border-0 bg-card shadow-lg ring-border/70"><CardHeader><div className="mb-4 flex items-center justify-between"><span className="grid size-10 place-items-center rounded-xl bg-[#fff0e7] text-[#ba5b45]"><BookOpenText /></span><span className="rounded-full bg-muted px-3 py-1 text-xs">Aus deiner Liste</span></div><CardDescription>Wort des Tages</CardDescription><CardTitle className="font-heading text-3xl text-primary">{focus.target}</CardTitle></CardHeader><CardContent><p>{focus.translation}</p>{focus.morphemes && <div className="mt-4 flex gap-1.5">{focus.morphemes.map((part) => <span key={part} className="rounded-lg bg-muted px-2.5 py-1 font-mono text-xs">{part}</span>)}</div>}<Button variant="outline" className="mt-5 rounded-xl" onClick={speak}><Volume2 /> Aussprache</Button></CardContent></Card>}<Card className="border-0 bg-[#fbf2db] ring-[#e8d7ae]"><CardHeader><span className="mb-3 grid size-10 place-items-center rounded-xl bg-white/70 text-[#9b6c20]"><Mic2 /></span><CardTitle className="font-heading text-xl">Hören & nachsprechen</CardTitle><CardDescription>Gerätestimme, eigene Aufnahme oder hochgeladenes KI-Audio – lokal auf deinem Gerät.</CardDescription></CardHeader><CardContent className="flex gap-2 text-xs text-[#806c48]"><Headphones className="size-4" /> Im Vokabel-Editor verfügbar</CardContent></Card></div>
     </div>
+    <section className="mx-auto mt-8 max-w-6xl"><Card className="overflow-hidden border-0 bg-card ring-border/70"><div className="grid lg:grid-cols-[.72fr_1.28fr]"><CardHeader className="bg-[#fbf2db] p-6 sm:p-7"><div className="flex items-center justify-between"><span className="rounded-full bg-[#123f3a] px-3 py-1 text-xs font-bold text-white">A1 · Paket 1</span><span className="text-xs font-semibold text-[#8f671f]">{packPracticed}/{packWords.length} begonnen</span></div><CardTitle className="mt-4 font-heading text-3xl">{firstPack.title}</CardTitle><CardDescription className="leading-relaxed">{firstPack.goal}</CardDescription><Progress className="mt-2" value={packWords.length ? packPracticed / packWords.length * 100 : 0} /><Button className="mt-3 rounded-xl" disabled={!packWords.length} onClick={() => onStartPack(firstPack.id)}>Dieses Siebenerpaket starten <ArrowRight /></Button></CardHeader><CardContent className="p-6 sm:p-7"><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Ein Gespräch statt sieben Zufallswörter</p><div className="mt-4 grid gap-2 sm:grid-cols-2">{packWords.map((word, index) => <button key={word.id} className="flex items-center gap-3 rounded-xl border p-3 text-left transition hover:border-primary/30" onClick={() => onStartPack(firstPack.id)}><span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/8 text-xs font-bold text-primary">{index + 1}</span><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{word.target}</strong><span className="block truncate text-xs text-muted-foreground">{word.translation}</span></span><span className="text-[10px] text-primary">{learningStageMeta[learningStage(word)].label}</span></button>)}</div><p className="mt-4 text-xs leading-relaxed text-muted-foreground">Das Paket bleibt innerhalb einer Runde fest und kann direkt dreimal wiederholt werden. Erst „Neue Runde“ oder ein anderes Paket tauscht die Karten aus.</p></CardContent></div></Card></section>
     <section className="mx-auto mt-8 max-w-6xl"><div className="mb-4 flex items-end justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Dein Fundament</p><h2 className="font-heading text-2xl font-bold">Als Nächstes</h2></div><Button variant="ghost" onClick={onWords}>Alle {words.length} ansehen <ArrowRight /></Button></div><div className="grid gap-3 md:grid-cols-3">{words.slice(0, 3).map((word) => <Card key={word.id} size="sm" className="border-0 bg-card ring-border/70"><CardContent className="flex items-center justify-between py-1"><div><strong className="block">{word.target}</strong><span className="text-sm text-muted-foreground">{word.translation}</span></div><span className="rounded-full bg-secondary px-2.5 py-1 text-xs">{word.card.reps ? 'Lernen' : 'Neu'}</span></CardContent></Card>)}</div></section>
   </>;
 }
 
-function Words({ words, onSelect }: { words: VocabularyItem[]; onSelect: (item: VocabularyItem) => void }) {
+function Words({ words, archivedWords, onSelect, onRestore }: { words: VocabularyItem[]; archivedWords: VocabularyItem[]; onSelect: (item: VocabularyItem) => void; onRestore: (id: string) => void }) {
   const [query, setQuery] = useState(''); const [category, setCategory] = useState('Alle'); const categories = ['Alle', ...Array.from(new Set(words.map((word) => word.category))).sort()]; const shown = words.filter((word) => (category === 'Alle' || word.category === category) && `${word.target} ${word.translation}`.toLowerCase().includes(query.toLowerCase()));
-  return <div className="mx-auto mt-7 max-w-6xl"><div className="mb-5 grid gap-3 sm:grid-cols-[1fr_auto]"><label className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground" /><Input className="pl-9" placeholder="Swahili oder Deutsch suchen …" value={query} onChange={(event) => setQuery(event.target.value)} /></label><select className="h-9 rounded-xl border bg-card px-3 text-sm" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((value) => <option key={value}>{value}</option>)}</select></div><p className="mb-3 text-sm text-muted-foreground">{shown.length} Vokabeln · Anklicken für Details und Übungen</p><div className="grid gap-3 md:grid-cols-2">{shown.map((word) => <button key={word.id} onClick={() => onSelect(word)} className="group rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"><div className="flex gap-3"><span className="grid size-10 place-items-center rounded-xl bg-primary/8 font-heading font-bold text-primary">{word.target[0]}</span><span className="flex-1"><span className="flex flex-wrap gap-2"><strong>{word.target}</strong>{word.verification && <span className={`rounded-full px-2 py-0.5 text-[10px] ${word.verification.status === 'verified' ? 'bg-primary/8 text-primary' : 'bg-[#fff0d5] text-[#885f1e]'}`}>{word.verification.status === 'verified' ? 'Geprüft' : word.verification.status === 'corrected' ? 'Korrigiert' : 'Hinweis'}</span>}</span><span className="block text-sm text-muted-foreground">{word.translation}</span><span className="mt-2 block text-[11px] text-primary">{word.category}{word.lemma ? ` · ${word.lemma}` : ''} · {word.card.reps ? `${word.card.reps}× geübt` : 'neu'}</span></span><ArrowRight className="size-4 text-muted-foreground" /></div></button>)}</div></div>;
+  return <div className="mx-auto mt-7 max-w-6xl"><div className="mb-5 grid gap-3 sm:grid-cols-[1fr_auto]"><label className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground" /><Input className="pl-9" placeholder="Swahili oder Deutsch suchen …" value={query} onChange={(event) => setQuery(event.target.value)} /></label><select className="h-9 rounded-xl border bg-card px-3 text-sm" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((value) => <option key={value}>{value}</option>)}</select></div><p className="mb-3 text-sm text-muted-foreground">{shown.length} aktive Vokabeln · Anklicken für Sprachhinweise und Übungen</p><div className="grid gap-3 md:grid-cols-2">{shown.map((word) => { const stage = learningStage(word); return <button key={word.id} onClick={() => onSelect(word)} className="group rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"><div className="flex gap-3"><span className="grid size-10 place-items-center rounded-xl bg-primary/8 font-heading font-bold text-primary">{word.target[0]}</span><span className="flex-1"><span className="flex flex-wrap gap-2"><strong>{word.target}</strong>{word.cefrLevel && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold">{word.cefrLevel}</span>}{word.verification && <span className={`rounded-full px-2 py-0.5 text-[10px] ${word.verification.status === 'verified' ? 'bg-primary/8 text-primary' : 'bg-[#fff0d5] text-[#885f1e]'}`}>{word.verification.status === 'verified' ? 'Geprüft' : word.verification.status === 'corrected' ? 'Korrigiert' : 'Hinweis'}</span>}</span><span className="block text-sm text-muted-foreground">{word.translation}</span><span className="mt-2 block text-[11px] text-primary">{word.category}{word.lemma ? ` · ${word.lemma}` : ''} · {learningStageMeta[stage].label}</span></span><ArrowRight className="size-4 text-muted-foreground" /></div></button>; })}</div>{archivedWords.length > 0 && <section className="mt-10"><div className="mb-3"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nicht im Lernplan</p><h2 className="font-heading text-xl font-bold">Aus Lernplan entfernt</h2></div><div className="grid gap-2 md:grid-cols-2">{archivedWords.map((word) => <div key={word.id} className="flex items-center gap-3 rounded-xl border border-dashed bg-card/60 p-3"><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{word.target}</strong><span className="block truncate text-xs text-muted-foreground">{word.translation}</span></span><Button size="sm" variant="outline" className="rounded-lg" onClick={() => onRestore(word.id)}><ArchiveRestore /> Wieder aufnehmen</Button></div>)}</div></section>}</div>;
 }
 
 function Settings({ snapshot, onChange, onToast }: { snapshot: AppSnapshot; onChange: (value: AppSnapshot) => void; onToast: (message: string) => void }) {

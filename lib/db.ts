@@ -32,8 +32,9 @@ async function openDb(): Promise<IDBDatabase> {
 export function createInitialSnapshot(): AppSnapshot {
   const vocabulary = createSeedVocabulary();
   return {
-    version: 2,
+    version: 3,
     vocabulary,
+    deletedVocabularyIds: [],
     reviews: [],
     grammarExercises: createGrammarExercises(vocabulary),
     grammarReviews: [],
@@ -51,18 +52,21 @@ export function createInitialSnapshot(): AppSnapshot {
   };
 }
 
-type LegacySnapshot = Omit<AppSnapshot, 'version' | 'grammarExercises' | 'grammarReviews'> & {
-  version: 1 | 2;
+type LegacySnapshot = Omit<AppSnapshot, 'version' | 'grammarExercises' | 'grammarReviews' | 'deletedVocabularyIds'> & {
+  version: 1 | 2 | 3;
   grammarExercises?: AppSnapshot['grammarExercises'];
   grammarReviews?: AppSnapshot['grammarReviews'];
+  deletedVocabularyIds?: string[];
 };
 
 function migrateSnapshot(raw: LegacySnapshot): AppSnapshot {
   const seed = createSeedVocabulary();
+  const deletedVocabularyIds = raw.deletedVocabularyIds ?? [];
+  const deletedIds = new Set(deletedVocabularyIds);
   const existingIds = new Set(raw.vocabulary.map((word) => word.id));
   const vocabulary = auditVocabulary([
     ...raw.vocabulary,
-    ...seed.filter((word) => !existingIds.has(word.id)),
+    ...seed.filter((word) => !existingIds.has(word.id) && !deletedIds.has(word.id)),
   ]);
   const generated = createGrammarExercises(vocabulary);
   const storedById = new Map((raw.grammarExercises ?? []).map((exercise) => [exercise.id, exercise]));
@@ -72,8 +76,9 @@ function migrateSnapshot(raw: LegacySnapshot): AppSnapshot {
   });
   return {
     ...raw,
-    version: 2,
+    version: 3,
     vocabulary,
+    deletedVocabularyIds,
     grammarExercises,
     grammarReviews: raw.grammarReviews ?? [],
     settings: {
@@ -146,7 +151,7 @@ export async function createBackup(snapshot: AppSnapshot): Promise<BackupFile> {
 
 export async function restoreBackup(backup: BackupFile) {
   const raw = backup.snapshot as unknown as LegacySnapshot;
-  if (backup.app !== 'sema-7' || !raw || ![1, 2].includes(raw.version)) throw new Error('Diese Datei ist kein gültiges Sema-7-Backup.');
+  if (backup.app !== 'sema-7' || !raw || ![1, 2, 3].includes(raw.version)) throw new Error('Diese Datei ist kein gültiges Sema-7-Backup.');
   const migrated = migrateSnapshot(raw);
   const db = await openDb();
   await request(db.transaction('app', 'readwrite').objectStore('app').put(migrated, APP_KEY));

@@ -60,6 +60,13 @@ const rows: SeedRow[] = [
   ['nipo / niko / nimo', 'ich bin da / an einem Ort / darin', 'Grammatik', '', '', 'po = genauer Ort, ko = allgemeiner Ort, mo = innen'],
   ['Subiri kidogo, narudi sasa hivi.', 'Warte kurz, ich komme gleich zurück.', 'Gespräch', '', '', 'subiri = warte, kidogo = ein wenig, narudi = ich kehre zurück'],
   ['Habari ya jioni?', 'Guten Abend! / Wie geht es heute Abend?', 'Begrüßung', 'Habari ya jioni?', 'Guten Abend!', 'jioni = Abend'],
+  ['Habari?', 'Wie geht es? / Was gibt es Neues?', 'A1 · Begrüßung', 'Habari? — Nzuri, asante.', 'Wie geht es? — Gut, danke.', 'Habari bedeutet wörtlich „Neuigkeiten“.'],
+  ['Hujambo?', 'Geht es dir gut?', 'A1 · Begrüßung', 'Hujambo? — Sijambo.', 'Geht es dir gut? — Mir geht es gut.', 'HU-jambo fragt nach dir, SI-jambo antwortet für mich.'],
+  ['Shikamoo. — Marahaba.', 'Respektvolle Begrüßung einer älteren Person und Antwort', 'A1 · Begrüßung', 'Shikamoo, mama. — Marahaba.', 'Respektvolle Begrüßung und Antwort.', 'Dieses Paar gehört zusammen: Shikamoo – Marahaba.'],
+  ['Asante sana.', 'Vielen Dank.', 'A1 · Höflichkeit', 'Asante sana kwa msaada.', 'Vielen Dank für die Hilfe.', 'sana verstärkt: sehr / viel.'],
+  ['Tafadhali.', 'Bitte.', 'A1 · Höflichkeit', 'Maji, tafadhali.', 'Wasser, bitte.', 'Tafadhali macht eine Bitte höflicher.'],
+  ['Samahani.', 'Entschuldigung / Verzeihung.', 'A1 · Höflichkeit', 'Samahani, unaweza kunisaidia?', 'Entschuldigung, kannst du mir helfen?', 'Samahani öffnet höflich eine Frage oder entschuldigt.'],
+  ['Karibu! / Karibuni!', 'Willkommen! – eine Person / mehrere Personen', 'A1 · Höflichkeit', 'Karibu ukae. / Karibuni mkae.', 'Setz dich gern. / Setzt euch gern.', 'Die Endung -ni richtet sich an mehrere Personen.'],
 ];
 
 const originalCorrections: Record<number, string> = {
