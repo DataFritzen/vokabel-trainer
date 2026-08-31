@@ -102,6 +102,10 @@ export type AppSettings = {
   activeLanguage: LanguageCode;
   dailyGoal: number;
   targetDate: string;
+  targetLevel: 'B1';
+  regionalFocus: 'paje-michamvi';
+  regionalTrackEnabled: boolean;
+  slangTrackEnabled: boolean;
   diagnosticDone: boolean;
   preferUploadedAudio: boolean;
 };

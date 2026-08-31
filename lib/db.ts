@@ -41,6 +41,10 @@ export function createInitialSnapshot(): AppSnapshot {
       activeLanguage: 'sw',
       dailyGoal: 7,
       targetDate: '2026-12-01',
+      targetLevel: 'B1',
+      regionalFocus: 'paje-michamvi',
+      regionalTrackEnabled: true,
+      slangTrackEnabled: true,
       diagnosticDone: false,
       preferUploadedAudio: true,
     },
@@ -66,7 +70,20 @@ function migrateSnapshot(raw: LegacySnapshot): AppSnapshot {
     const stored = storedById.get(exercise.id);
     return stored ? { ...exercise, card: stored.card } : exercise;
   });
-  return { ...raw, version: 2, vocabulary, grammarExercises, grammarReviews: raw.grammarReviews ?? [] };
+  return {
+    ...raw,
+    version: 2,
+    vocabulary,
+    grammarExercises,
+    grammarReviews: raw.grammarReviews ?? [],
+    settings: {
+      ...raw.settings,
+      targetLevel: raw.settings.targetLevel ?? 'B1',
+      regionalFocus: raw.settings.regionalFocus ?? 'paje-michamvi',
+      regionalTrackEnabled: raw.settings.regionalTrackEnabled ?? true,
+      slangTrackEnabled: raw.settings.slangTrackEnabled ?? true,
+    },
+  };
 }
 
 export async function loadSnapshot(): Promise<AppSnapshot> {
