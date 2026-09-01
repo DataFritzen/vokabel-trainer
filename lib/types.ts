@@ -1,6 +1,18 @@
 export type LanguageCode = 'sw' | 'es';
 export type WordSkillArea = 'meaning' | 'forms' | 'sentences';
-export type VerbFormKey = 'present' | 'past' | 'perfect' | 'future' | 'negative';
+export type VerbFormKey =
+  | 'present'
+  | 'past'
+  | 'perfect'
+  | 'future'
+  | 'negative';
+export type VocabularyReadiness = 'unassessed' | 'basic' | 'deepening';
+export type CurriculumRole =
+  | 'core'
+  | 'helper'
+  | 'sentence-model'
+  | 'grammar-variant'
+  | 'enrichment';
 
 export type SerializedCard = {
   due: string;
@@ -32,6 +44,14 @@ export type VocabularyItem = {
   learningStatus?: 'planned' | 'active' | 'archived';
   cefrLevel?: 'A1' | 'A2' | 'B1';
   learningPackId?: string;
+  placementStatus?: 'learning' | 'known';
+  curriculum?: {
+    unitId: string;
+    role: CurriculumRole;
+    priority: 'now' | 'soon' | 'later';
+    linkedVocabularyId?: string;
+    rationale: string;
+  };
   responseTarget?: string;
   responseTranslation?: string;
   nounClass?: string;
@@ -104,7 +124,9 @@ export type LearningPack = {
   title: string;
   goal: string;
   vocabularyIds: string[];
+  supportingVocabularyIds?: string[];
   prerequisiteIds: string[];
+  activation: 'already-active' | 'on-start';
 };
 
 export type GrammarReviewEntry = {

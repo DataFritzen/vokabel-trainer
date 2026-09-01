@@ -1,34 +1,421 @@
 'use client';
 
-import { Archive, BookOpenCheck, CheckCircle2, ExternalLink, Lightbulb, MapPin, Pencil, ShieldCheck, Trash2, X } from 'lucide-react';
+import {
+  Archive,
+  BookOpenCheck,
+  CheckCircle2,
+  ExternalLink,
+  Lightbulb,
+  MapPin,
+  Pencil,
+  ShieldCheck,
+  Trash2,
+  X,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { curriculumRoleLabels } from '@/lib/vocabulary-curriculum';
 import { masteryPercent } from '@/lib/scheduler';
-import { verbFormLabels, wordMastery, type VocabularyTrainingMode } from '@/lib/vocabulary-training';
+import {
+  vocabularyReadiness,
+  verbFormLabels,
+  wordMastery,
+  type VocabularyTrainingMode,
+} from '@/lib/vocabulary-training';
 import type { GrammarExercise, VerbFormKey, VocabularyItem } from '@/lib/types';
 
-const statusLabel = { verified: 'Geprüft', corrected: 'Korrigiert', nuance: 'Mit Hinweis' } as const;
+const statusLabel = {
+  verified: 'Geprüft',
+  corrected: 'Korrigiert',
+  nuance: 'Mit Hinweis',
+} as const;
 
-export function VocabularyDetail({ word, exercises, onClose, onEdit, onPractice, onTrain, onArchive, onDelete }: { word: VocabularyItem; exercises: GrammarExercise[]; onClose: () => void; onEdit: () => void; onPractice: (items: GrammarExercise[]) => void; onTrain: (mode: VocabularyTrainingMode) => void; onArchive: () => void; onDelete: () => void }) {
+export function VocabularyDetail({
+  word,
+  exercises,
+  onClose,
+  onEdit,
+  onPractice,
+  onTrain,
+  onArchive,
+  onDelete,
+}: {
+  word: VocabularyItem;
+  exercises: GrammarExercise[];
+  onClose: () => void;
+  onEdit: () => void;
+  onPractice: (items: GrammarExercise[]) => void;
+  onTrain: (mode: VocabularyTrainingMode) => void;
+  onArchive: () => void;
+  onDelete: () => void;
+}) {
   const grammar = exercises.filter((exercise) => exercise.kind !== 'sentence');
-  const sentences = exercises.filter((exercise) => exercise.kind === 'sentence');
+  const sentences = exercises.filter(
+    (exercise) => exercise.kind === 'sentence',
+  );
   const mastery = wordMastery(word);
-  return <dialog open className="fixed inset-0 z-50 m-0 grid h-full max-h-none w-full max-w-none place-items-center border-0 bg-[#082b28]/60 p-3 backdrop-blur-sm"><div className="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-card text-foreground shadow-2xl">
-    <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-card/95 p-4 backdrop-blur"><div><p className="text-xs text-muted-foreground">{word.category}</p><h2 className="font-heading text-3xl font-bold text-primary">{word.target}</h2><p className="text-sm text-muted-foreground">{word.translation}</p></div><Button size="icon" variant="ghost" onClick={onClose}><X /></Button></header>
-    <div className="space-y-5 p-5">
-      <div className="flex flex-wrap gap-2">{word.cefrLevel && <span className="rounded-full bg-primary/8 px-3 py-1 text-xs font-bold text-primary">{word.cefrLevel}</span>}{word.languageGuidance && <><span className="rounded-full bg-muted px-3 py-1 text-xs">{word.languageGuidance.register === 'respectful' ? 'respektvoll' : word.languageGuidance.register === 'polite' ? 'höflich' : word.languageGuidance.register === 'informal' ? 'informell' : 'neutral'}</span><span className="rounded-full bg-muted px-3 py-1 text-xs">{word.languageGuidance.useMode === 'active' ? 'aktiv sprechen' : 'zuerst verstehen'}</span></>}</div>
-      {word.learningStatus !== 'planned' && <section className="rounded-2xl border p-4"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-wider text-primary">Kompetenzanalyse</p><h3 className="font-heading text-xl font-bold">Was kannst du mit diesem Wort?</h3></div><strong className="font-heading text-2xl text-primary">{mastery.overall}%</strong></div><div className="mt-4 grid gap-3 sm:grid-cols-3"><SkillProgress label="Bedeutung" value={mastery.meaning} onClick={() => onTrain('meaning')} /><SkillProgress label="Formen" value={mastery.forms} onClick={() => onTrain('forms')} /><SkillProgress label="Im Satz" value={mastery.sentences} onClick={() => onTrain('sentences')} /></div>{word.verbProfileId && <details className="mt-3 rounded-xl bg-muted p-3"><summary className="cursor-pointer text-sm font-semibold text-primary">Zeitformen im Detail</summary><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">{(Object.keys(verbFormLabels) as VerbFormKey[]).map((key) => <div key={key} className="rounded-lg bg-card p-2 text-center"><strong className="block text-sm">{masteryPercent(word.skillCards?.forms[key] ?? word.card)}%</strong><span className="text-[10px] text-muted-foreground">{verbFormLabels[key]}</span></div>)}</div></details>}<Button className="mt-3 w-full rounded-xl" onClick={() => onTrain('smart')}>Schwächsten Bereich trainieren</Button></section>}
-      {word.verification && <div className="flex gap-3 rounded-2xl border border-primary/15 bg-primary/5 p-4"><ShieldCheck className="mt-0.5 size-5 shrink-0 text-primary" /><div><strong className="text-sm">{statusLabel[word.verification.status]}</strong><p className="mt-1 text-sm text-muted-foreground">{word.verification.note}</p></div></div>}
-      {word.responseTarget && <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-primary">Passende Antwort</p><strong className="mt-2 block text-lg">{word.responseTarget}</strong><p className="text-sm text-muted-foreground">{word.responseTranslation}</p></div>}
-      {word.exampleTarget && <div className="rounded-2xl bg-muted p-4"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Im Satz</p><strong className="mt-2 block text-lg">{word.exampleTarget}</strong><p className="text-sm text-muted-foreground">{word.exampleTranslation}</p></div>}
-      {(word.lemma || word.nounClass) && <div className="grid gap-3 sm:grid-cols-2">{word.lemma && <div className="rounded-2xl border p-4"><span className="text-xs text-muted-foreground">Grundform</span><strong className="mt-1 block text-lg">{word.lemma}</strong></div>}<div className="rounded-2xl border p-4"><span className="text-xs text-muted-foreground">{word.nounClass ? 'Nomenklasse' : 'Wortart'}</span><strong className="mt-1 block text-lg">{word.nounClass ?? (word.partOfSpeech === 'verb' ? 'Verb' : word.partOfSpeech ?? 'Ausdruck')}</strong></div></div>}
-      {word.languageGuidance && <section className="space-y-3"><div className="rounded-2xl border p-4"><p className="text-xs font-semibold uppercase tracking-wider text-primary">Standard-Swahili</p><p className="mt-2 text-sm leading-relaxed">{word.languageGuidance.standard}</p></div><div className="grid gap-3 sm:grid-cols-2"><div className="rounded-2xl border p-4"><strong className="text-sm">Warum ist das so?</strong><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{word.languageGuidance.why}</p></div><div className="rounded-2xl border border-[#ead4a4] bg-[#fff8e8] p-4"><strong className="text-sm text-[#7c5b20]">Typischer Anfängerfehler</strong><p className="mt-2 text-sm leading-relaxed text-[#756747]">{word.languageGuidance.commonMistake}</p></div></div><div className="rounded-2xl border p-4"><div className="flex items-center gap-2"><MapPin className="size-4 text-primary" /><strong className="text-sm">Paje & Michamvi</strong><span className="ml-auto rounded-full bg-muted px-2 py-1 text-[10px] font-semibold">{word.languageGuidance.regionalStatus === 'local-verified' ? 'lokal bestätigt' : word.languageGuidance.regionalStatus === 'local-review' ? 'lokal noch prüfen' : 'standard-sicher'}</span></div><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{word.languageGuidance.localUsage}</p>{word.languageGuidance.sourceUrl && <a className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline" href={word.languageGuidance.sourceUrl} target="_blank" rel="noreferrer">{word.languageGuidance.sourceLabel} <ExternalLink className="size-3" /></a>}</div></section>}
-      {exercises.length ? <div><p className="text-xs font-semibold uppercase tracking-wider text-primary">Aktiv trainieren</p><h3 className="font-heading text-2xl font-bold">Übungen zu diesem Wort</h3><div className="mt-3 grid gap-3 sm:grid-cols-2"><button className="rounded-2xl border bg-card p-4 text-left transition hover:border-primary/30 hover:shadow-md" onClick={() => onPractice(grammar)}><BookOpenCheck className="size-5 text-primary" /><strong className="mt-3 block">Grammatik üben</strong><span className="text-sm text-muted-foreground">{grammar.length} Aufgaben: Formen, Verneinung, Aufbau</span></button><button disabled={!sentences.length} className="rounded-2xl border bg-card p-4 text-left transition hover:border-primary/30 hover:shadow-md disabled:opacity-45" onClick={() => onPractice(sentences)}><CheckCircle2 className="size-5 text-primary" /><strong className="mt-3 block">Satz üben</strong><span className="text-sm text-muted-foreground">Den Beispielsatz selbst bilden und prüfen</span></button></div></div> : <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">Für dieses Wort gibt es noch kein Verbprofil. Du kannst weiterhin einen Beispielsatz und eigene Hinweise hinterlegen.</div>}
-      {(word.personalMnemonic || word.mnemonicSuggestion) && <div className="flex gap-3 rounded-2xl border border-[#ead4a4] bg-[#fff8e8] p-4"><Lightbulb className="size-5 shrink-0 text-[#8d651d]" /><p className="text-sm">{word.personalMnemonic || word.mnemonicSuggestion}</p></div>}
-    </div>
-    <footer className="grid gap-2 border-t p-4 sm:grid-cols-[1fr_auto_auto]"><Button variant="outline" className="rounded-xl" onClick={onEdit}><Pencil /> Vokabel bearbeiten</Button><Button variant="outline" className="rounded-xl" onClick={onArchive}><Archive /> Aus Lernplan</Button><Button variant="ghost" className="rounded-xl text-destructive hover:text-destructive" onClick={onDelete}><Trash2 /> Löschen</Button></footer>
-  </div></dialog>;
+  const readiness = vocabularyReadiness(word);
+  return (
+    <dialog
+      open
+      className="fixed inset-0 z-50 m-0 grid h-full max-h-none w-full max-w-none place-items-center border-0 bg-[#082b28]/60 p-3 backdrop-blur-sm"
+    >
+      <div className="max-h-[94vh] w-full max-w-3xl overflow-y-auto rounded-3xl bg-card text-foreground shadow-2xl">
+        <header className="sticky top-0 z-10 flex items-center justify-between border-b bg-card/95 p-4 backdrop-blur">
+          <div>
+            <p className="text-xs text-muted-foreground">{word.category}</p>
+            <h2 className="font-heading text-3xl font-bold text-primary">
+              {word.target}
+            </h2>
+            <p className="text-sm text-muted-foreground">{word.translation}</p>
+          </div>
+          <Button size="icon" variant="ghost" onClick={onClose}>
+            <X />
+          </Button>
+        </header>
+        <div className="space-y-5 p-5">
+          <div className="flex flex-wrap gap-2">
+            {word.cefrLevel && (
+              <span className="rounded-full bg-primary/8 px-3 py-1 text-xs font-bold text-primary">
+                {word.cefrLevel}
+              </span>
+            )}
+            {word.curriculum && (
+              <span className="rounded-full bg-[#fff0d5] px-3 py-1 text-xs font-semibold text-[#7c5b20]">
+                {curriculumRoleLabels[word.curriculum.role]}
+              </span>
+            )}
+            {word.languageGuidance && (
+              <>
+                <span className="rounded-full bg-muted px-3 py-1 text-xs">
+                  {word.languageGuidance.register === 'respectful'
+                    ? 'respektvoll'
+                    : word.languageGuidance.register === 'polite'
+                      ? 'höflich'
+                      : word.languageGuidance.register === 'informal'
+                        ? 'informell'
+                        : 'neutral'}
+                </span>
+                <span className="rounded-full bg-muted px-3 py-1 text-xs">
+                  {word.languageGuidance.useMode === 'active'
+                    ? 'aktiv sprechen'
+                    : 'zuerst verstehen'}
+                </span>
+              </>
+            )}
+          </div>
+          {word.curriculum && (
+            <div className="rounded-2xl border border-[#ead4a4] bg-[#fff8e8] p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[#7c5b20]">
+                Rolle im Lernplan
+              </p>
+              <strong className="mt-1 block">
+                {curriculumRoleLabels[word.curriculum.role]} ·{' '}
+                {word.curriculum.priority === 'now'
+                  ? 'jetzt wichtig'
+                  : word.curriculum.priority === 'soon'
+                    ? 'danach vertiefen'
+                    : 'später ausreichend'}
+              </strong>
+              <p className="mt-1 text-sm leading-relaxed text-[#756747]">
+                {word.curriculum.rationale}
+              </p>
+            </div>
+          )}
+          {word.learningStatus !== 'planned' && (
+            <section className="rounded-2xl border p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+                    Kompetenzanalyse
+                  </p>
+                  <h3 className="font-heading text-xl font-bold">
+                    Was kannst du mit diesem Wort?
+                  </h3>
+                  <span className="text-xs text-muted-foreground">
+                    {readiness === 'deepening'
+                      ? 'für Vertiefung bereit'
+                      : readiness === 'basic'
+                        ? 'noch im Grundlernen'
+                        : 'noch nicht eingestuft'}
+                  </span>
+                </div>
+                <strong className="font-heading text-2xl text-primary">
+                  {mastery.overall}%
+                </strong>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <SkillProgress
+                  label="Bedeutung"
+                  value={mastery.meaning}
+                  onClick={() => onTrain('meaning')}
+                  disabled={readiness !== 'deepening'}
+                />
+                <SkillProgress
+                  label="Formen"
+                  value={mastery.forms}
+                  onClick={() => onTrain('forms')}
+                  disabled={readiness !== 'deepening'}
+                />
+                <SkillProgress
+                  label="Im Satz"
+                  value={mastery.sentences}
+                  onClick={() => onTrain('sentences')}
+                  disabled={readiness !== 'deepening'}
+                />
+              </div>
+              {word.verbProfileId && (
+                <details className="mt-3 rounded-xl bg-muted p-3">
+                  <summary className="cursor-pointer text-sm font-semibold text-primary">
+                    Zeitformen im Detail
+                  </summary>
+                  <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                    {(Object.keys(verbFormLabels) as VerbFormKey[]).map(
+                      (key) => (
+                        <div
+                          key={key}
+                          className="rounded-lg bg-card p-2 text-center"
+                        >
+                          <strong className="block text-sm">
+                            {masteryPercent(
+                              word.skillCards?.forms[key] ?? word.card,
+                            )}
+                            %
+                          </strong>
+                          <span className="text-[10px] text-muted-foreground">
+                            {verbFormLabels[key]}
+                          </span>
+                        </div>
+                      ),
+                    )}
+                  </div>
+                </details>
+              )}
+              <Button
+                disabled={readiness !== 'deepening'}
+                className="mt-3 w-full rounded-xl"
+                onClick={() => onTrain('smart')}
+              >
+                Schwächsten Bereich trainieren
+              </Button>
+              {readiness !== 'deepening' && (
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Zuerst im Grundlernen unter „Heute“ festigen; danach werden
+                  Satz- und Formenmodi freigeschaltet.
+                </p>
+              )}
+            </section>
+          )}
+          {word.verification && (
+            <div className="flex gap-3 rounded-2xl border border-primary/15 bg-primary/5 p-4">
+              <ShieldCheck className="mt-0.5 size-5 shrink-0 text-primary" />
+              <div>
+                <strong className="text-sm">
+                  {statusLabel[word.verification.status]}
+                </strong>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {word.verification.note}
+                </p>
+              </div>
+            </div>
+          )}
+          {word.responseTarget && (
+            <div className="rounded-2xl border border-primary/15 bg-primary/5 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+                Passende Antwort
+              </p>
+              <strong className="mt-2 block text-lg">
+                {word.responseTarget}
+              </strong>
+              <p className="text-sm text-muted-foreground">
+                {word.responseTranslation}
+              </p>
+            </div>
+          )}
+          {word.exampleTarget && (
+            <div className="rounded-2xl bg-muted p-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Im Satz
+              </p>
+              <strong className="mt-2 block text-lg">
+                {word.exampleTarget}
+              </strong>
+              <p className="text-sm text-muted-foreground">
+                {word.exampleTranslation}
+              </p>
+            </div>
+          )}
+          {(word.lemma || word.nounClass) && (
+            <div className="grid gap-3 sm:grid-cols-2">
+              {word.lemma && (
+                <div className="rounded-2xl border p-4">
+                  <span className="text-xs text-muted-foreground">
+                    Grundform
+                  </span>
+                  <strong className="mt-1 block text-lg">{word.lemma}</strong>
+                </div>
+              )}
+              <div className="rounded-2xl border p-4">
+                <span className="text-xs text-muted-foreground">
+                  {word.nounClass ? 'Nomenklasse' : 'Wortart'}
+                </span>
+                <strong className="mt-1 block text-lg">
+                  {word.nounClass ??
+                    (word.partOfSpeech === 'verb'
+                      ? 'Verb'
+                      : (word.partOfSpeech ?? 'Ausdruck'))}
+                </strong>
+              </div>
+            </div>
+          )}
+          {word.languageGuidance && (
+            <section className="space-y-3">
+              <div className="rounded-2xl border p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+                  Standard-Swahili
+                </p>
+                <p className="mt-2 text-sm leading-relaxed">
+                  {word.languageGuidance.standard}
+                </p>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-2xl border p-4">
+                  <strong className="text-sm">Warum ist das so?</strong>
+                  <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                    {word.languageGuidance.why}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-[#ead4a4] bg-[#fff8e8] p-4">
+                  <strong className="text-sm text-[#7c5b20]">
+                    Typischer Anfängerfehler
+                  </strong>
+                  <p className="mt-2 text-sm leading-relaxed text-[#756747]">
+                    {word.languageGuidance.commonMistake}
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-2xl border p-4">
+                <div className="flex items-center gap-2">
+                  <MapPin className="size-4 text-primary" />
+                  <strong className="text-sm">Paje & Michamvi</strong>
+                  <span className="ml-auto rounded-full bg-muted px-2 py-1 text-[10px] font-semibold">
+                    {word.languageGuidance.regionalStatus === 'local-verified'
+                      ? 'lokal bestätigt'
+                      : word.languageGuidance.regionalStatus === 'local-review'
+                        ? 'lokal noch prüfen'
+                        : 'standard-sicher'}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  {word.languageGuidance.localUsage}
+                </p>
+                {word.languageGuidance.sourceUrl && (
+                  <a
+                    className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+                    href={word.languageGuidance.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    {word.languageGuidance.sourceLabel}{' '}
+                    <ExternalLink className="size-3" />
+                  </a>
+                )}
+              </div>
+            </section>
+          )}
+          {exercises.length ? (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-primary">
+                Aktiv trainieren
+              </p>
+              <h3 className="font-heading text-2xl font-bold">
+                Übungen zu diesem Wort
+              </h3>
+              <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                <button
+                  className="rounded-2xl border bg-card p-4 text-left transition hover:border-primary/30 hover:shadow-md"
+                  onClick={() => onPractice(grammar)}
+                >
+                  <BookOpenCheck className="size-5 text-primary" />
+                  <strong className="mt-3 block">Grammatik üben</strong>
+                  <span className="text-sm text-muted-foreground">
+                    {grammar.length} Aufgaben: Formen, Verneinung, Aufbau
+                  </span>
+                </button>
+                <button
+                  disabled={!sentences.length}
+                  className="rounded-2xl border bg-card p-4 text-left transition hover:border-primary/30 hover:shadow-md disabled:opacity-45"
+                  onClick={() => onPractice(sentences)}
+                >
+                  <CheckCircle2 className="size-5 text-primary" />
+                  <strong className="mt-3 block">Satz üben</strong>
+                  <span className="text-sm text-muted-foreground">
+                    Den Beispielsatz selbst bilden und prüfen
+                  </span>
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
+              Für dieses Wort gibt es noch kein Verbprofil. Du kannst weiterhin
+              einen Beispielsatz und eigene Hinweise hinterlegen.
+            </div>
+          )}
+          {(word.personalMnemonic || word.mnemonicSuggestion) && (
+            <div className="flex gap-3 rounded-2xl border border-[#ead4a4] bg-[#fff8e8] p-4">
+              <Lightbulb className="size-5 shrink-0 text-[#8d651d]" />
+              <p className="text-sm">
+                {word.personalMnemonic || word.mnemonicSuggestion}
+              </p>
+            </div>
+          )}
+        </div>
+        <footer className="grid gap-2 border-t p-4 sm:grid-cols-[1fr_auto_auto]">
+          <Button variant="outline" className="rounded-xl" onClick={onEdit}>
+            <Pencil /> Vokabel bearbeiten
+          </Button>
+          <Button variant="outline" className="rounded-xl" onClick={onArchive}>
+            <Archive /> Aus Lernplan
+          </Button>
+          <Button
+            variant="ghost"
+            className="rounded-xl text-destructive hover:text-destructive"
+            onClick={onDelete}
+          >
+            <Trash2 /> Löschen
+          </Button>
+        </footer>
+      </div>
+    </dialog>
+  );
 }
 
-function SkillProgress({ label, value, onClick }: { label: string; value: number | null; onClick: () => void }) { return <button disabled={value === null} onClick={onClick} className="rounded-xl bg-muted p-3 text-left disabled:opacity-45"><span className="flex justify-between text-xs"><span>{label}</span><strong>{value === null ? '–' : `${value}%`}</strong></span><Progress className="mt-2" value={value ?? 0} /><span className="mt-2 block text-[10px] font-semibold text-primary">Gezielt üben</span></button>; }
+function SkillProgress({
+  label,
+  value,
+  onClick,
+  disabled = false,
+}: {
+  label: string;
+  value: number | null;
+  onClick: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      disabled={disabled || value === null}
+      onClick={onClick}
+      className="rounded-xl bg-muted p-3 text-left disabled:opacity-45"
+    >
+      <span className="flex justify-between text-xs">
+        <span>{label}</span>
+        <strong>{value === null ? '–' : `${value}%`}</strong>
+      </span>
+      <Progress className="mt-2" value={value ?? 0} />
+      <span className="mt-2 block text-[10px] font-semibold text-primary">
+        Gezielt üben
+      </span>
+    </button>
+  );
+}

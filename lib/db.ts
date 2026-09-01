@@ -32,8 +32,17 @@ async function openDb(): Promise<IDBDatabase> {
 }
 
 export function createInitialSnapshot(): AppSnapshot {
-  const plannedIds = new Set(learningPacks.flatMap((pack) => pack.vocabularyIds));
-  const vocabulary = createSeedVocabulary().map((word) => ensureVocabularySkillCards({ ...word, learningStatus: plannedIds.has(word.id) ? 'planned' : word.learningStatus }));
+  const plannedIds = new Set(
+    learningPacks
+      .filter((pack) => pack.activation === 'on-start')
+      .flatMap((pack) => pack.vocabularyIds),
+  );
+  const vocabulary = createSeedVocabulary().map((word) =>
+    ensureVocabularySkillCards({
+      ...word,
+      learningStatus: plannedIds.has(word.id) ? 'planned' : word.learningStatus,
+    }),
+  );
   return {
     version: 4,
     vocabulary,
@@ -57,7 +66,15 @@ export function createInitialSnapshot(): AppSnapshot {
   };
 }
 
-type LegacySnapshot = Omit<AppSnapshot, 'version' | 'grammarExercises' | 'grammarReviews' | 'deletedVocabularyIds' | 'startedLearningPackIds' | 'wordSkillReviews'> & {
+type LegacySnapshot = Omit<
+  AppSnapshot,
+  | 'version'
+  | 'grammarExercises'
+  | 'grammarReviews'
+  | 'deletedVocabularyIds'
+  | 'startedLearningPackIds'
+  | 'wordSkillReviews'
+> & {
   version: 1 | 2 | 3 | 4;
   grammarExercises?: AppSnapshot['grammarExercises'];
   grammarReviews?: AppSnapshot['grammarReviews'];
@@ -71,14 +88,39 @@ function migrateSnapshot(raw: LegacySnapshot): AppSnapshot {
   const deletedVocabularyIds = raw.deletedVocabularyIds ?? [];
   const deletedIds = new Set(deletedVocabularyIds);
   const existingIds = new Set(raw.vocabulary.map((word) => word.id));
-  const startedLearningPackIds = raw.startedLearningPackIds ?? learningPacks.filter((pack) => pack.vocabularyIds.some((id) => raw.reviews.some((review) => review.vocabularyId === id) || raw.activeRound?.vocabularyIds.includes(id) || raw.vocabulary.find((word) => word.id === id)?.card.reps)).map((pack) => pack.id);
+  const startedLearningPackIds =
+    raw.startedLearningPackIds ??
+    learningPacks
+      .filter((pack) =>
+        pack.vocabularyIds.some(
+          (id) =>
+            raw.reviews.some((review) => review.vocabularyId === id) ||
+            raw.activeRound?.vocabularyIds.includes(id) ||
+            raw.vocabulary.find((word) => word.id === id)?.card.reps,
+        ),
+      )
+      .map((pack) => pack.id);
   const startedIds = new Set(startedLearningPackIds);
   const vocabulary = auditVocabulary([
     ...raw.vocabulary,
-    ...seed.filter((word) => !existingIds.has(word.id) && !deletedIds.has(word.id)),
-  ]).map((word) => ensureVocabularySkillCards({ ...word, learningStatus: raw.version < 4 && word.learningPackId && !startedIds.has(word.learningPackId) ? 'planned' : word.learningStatus }));
+    ...seed.filter(
+      (word) => !existingIds.has(word.id) && !deletedIds.has(word.id),
+    ),
+  ]).map((word) =>
+    ensureVocabularySkillCards({
+      ...word,
+      learningStatus:
+        raw.version < 4 &&
+        word.learningPackId &&
+        !startedIds.has(word.learningPackId)
+          ? 'planned'
+          : word.learningStatus,
+    }),
+  );
   const generated = createGrammarExercises(vocabulary);
-  const storedById = new Map((raw.grammarExercises ?? []).map((exercise) => [exercise.id, exercise]));
+  const storedById = new Map(
+    (raw.grammarExercises ?? []).map((exercise) => [exercise.id, exercise]),
+  );
   const grammarExercises = generated.map((exercise) => {
     const stored = storedById.get(exercise.id);
     return stored ? { ...exercise, card: stored.card } : exercise;
@@ -106,7 +148,9 @@ export async function loadSnapshot(): Promise<AppSnapshot> {
   const db = await openDb();
   const tx = db.transaction('app', 'readwrite');
   const store = tx.objectStore('app');
-  const existing = await request(store.get(APP_KEY)) as LegacySnapshot | undefined;
+  const existing = (await request(store.get(APP_KEY))) as
+    | LegacySnapshot
+    | undefined;
   if (existing) {
     const migrated = migrateSnapshot(existing);
     await request(store.put(migrated, APP_KEY));
@@ -119,12 +163,19 @@ export async function loadSnapshot(): Promise<AppSnapshot> {
 
 export async function saveSnapshot(snapshot: AppSnapshot) {
   const db = await openDb();
-  await request(db.transaction('app', 'readwrite').objectStore('app').put(snapshot, APP_KEY));
+  await request(
+    db
+      .transaction('app', 'readwrite')
+      .objectStore('app')
+      .put(snapshot, APP_KEY),
+  );
 }
 
 export async function saveMedia(id: string, blob: Blob) {
   const db = await openDb();
-  await request(db.transaction('media', 'readwrite').objectStore('media').put(blob, id));
+  await request(
+    db.transaction('media', 'readwrite').objectStore('media').put(blob, id),
+  );
 }
 
 export async function getMedia(id?: string): Promise<Blob | undefined> {
@@ -136,7 +187,8 @@ export async function getMedia(id?: string): Promise<Blob | undefined> {
 function blobToDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+    reader.onload = () =>
+      resolve(typeof reader.result === 'string' ? reader.result : '');
     reader.onerror = () => reject(reader.error);
     reader.readAsDataURL(blob);
   });
@@ -151,23 +203,43 @@ function dataUrlToBlob(dataUrl: string) {
 
 export async function createBackup(snapshot: AppSnapshot): Promise<BackupFile> {
   const db = await openDb();
-  const ids = await request(db.transaction('media').objectStore('media').getAllKeys());
-  const media = await Promise.all(ids.map(async (key) => {
-    const id = typeof key === 'string' ? key : JSON.stringify(key);
-    const blob = await getMedia(id);
-    return { id, type: blob?.type ?? '', dataUrl: blob ? await blobToDataUrl(blob) : '' };
-  }));
-  return { app: 'sema-7', exportedAt: new Date().toISOString(), snapshot, media };
+  const ids = await request(
+    db.transaction('media').objectStore('media').getAllKeys(),
+  );
+  const media = await Promise.all(
+    ids.map(async (key) => {
+      const id = typeof key === 'string' ? key : JSON.stringify(key);
+      const blob = await getMedia(id);
+      return {
+        id,
+        type: blob?.type ?? '',
+        dataUrl: blob ? await blobToDataUrl(blob) : '',
+      };
+    }),
+  );
+  return {
+    app: 'sema-7',
+    exportedAt: new Date().toISOString(),
+    snapshot,
+    media,
+  };
 }
 
 export async function restoreBackup(backup: BackupFile) {
   const raw = backup.snapshot as unknown as LegacySnapshot;
-  if (backup.app !== 'sema-7' || !raw || ![1, 2, 3, 4].includes(raw.version)) throw new Error('Diese Datei ist kein gültiges Sema-7-Backup.');
+  if (backup.app !== 'sema-7' || !raw || ![1, 2, 3, 4].includes(raw.version))
+    throw new Error('Diese Datei ist kein gültiges Sema-7-Backup.');
   const migrated = migrateSnapshot(raw);
   const db = await openDb();
-  await request(db.transaction('app', 'readwrite').objectStore('app').put(migrated, APP_KEY));
+  await request(
+    db
+      .transaction('app', 'readwrite')
+      .objectStore('app')
+      .put(migrated, APP_KEY),
+  );
   const tx = db.transaction('media', 'readwrite');
   tx.objectStore('media').clear();
-  for (const media of backup.media ?? []) tx.objectStore('media').put(dataUrlToBlob(media.dataUrl), media.id);
+  for (const media of backup.media ?? [])
+    tx.objectStore('media').put(dataUrlToBlob(media.dataUrl), media.id);
   return migrated;
 }

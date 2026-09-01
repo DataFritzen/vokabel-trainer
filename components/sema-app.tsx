@@ -1,7 +1,30 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { ArchiveRestore, ArrowRight, BookOpenCheck, BookOpenText, Brain, CalendarDays, Check, CircleAlert, Download, Flame, Headphones, Languages, Library, Map as MapIcon, Mic2, Plus, Search, Settings2, Sparkles, Upload, Volume2 } from 'lucide-react';
+import Image from 'next/image';
+import {
+  ArchiveRestore,
+  ArrowRight,
+  BookOpenCheck,
+  BookOpenText,
+  Brain,
+  CalendarDays,
+  Check,
+  CircleAlert,
+  Download,
+  Flame,
+  Headphones,
+  Languages,
+  Library,
+  Map as MapIcon,
+  Mic2,
+  Plus,
+  Search,
+  Settings2,
+  Sparkles,
+  Upload,
+  Volume2,
+} from 'lucide-react';
 
 import { GrammarHub } from '@/components/grammar-hub';
 import { GrammarPractice } from '@/components/grammar-practice';
@@ -13,23 +36,66 @@ import { VocabularyTrainer } from '@/components/vocabulary-trainer';
 import { VocabularyTrainingSession } from '@/components/vocabulary-training-session';
 import { WordEditor } from '@/components/word-editor';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { learningPacks } from '@/lib/curriculum';
-import { createBackup, loadSnapshot, restoreBackup, saveSnapshot } from '@/lib/db';
+import {
+  createBackup,
+  loadSnapshot,
+  restoreBackup,
+  saveSnapshot,
+} from '@/lib/db';
 import { grammarExercisesForVocabulary } from '@/lib/grammar-content';
 import { learningStage, learningStageMeta } from '@/lib/learning-status';
 import { isDue, schedule } from '@/lib/scheduler';
-import { buildVocabularyTrainingTasks, ensureVocabularySkillCards, type VerbFormFilter, type VocabularyTrainingMode, type VocabularyTrainingTask } from '@/lib/vocabulary-training';
-import type { AppSnapshot, BackupFile, GrammarExercise, VocabularyItem } from '@/lib/types';
+import {
+  buildVocabularyTrainingTasks,
+  ensureVocabularySkillCards,
+  type VerbFormFilter,
+  type VocabularyTrainingMode,
+  type VocabularyTrainingTask,
+} from '@/lib/vocabulary-training';
+import {
+  curriculumOrder,
+  curriculumRoleLabels,
+} from '@/lib/vocabulary-curriculum';
+import type {
+  AppSnapshot,
+  BackupFile,
+  GrammarExercise,
+  VocabularyItem,
+} from '@/lib/types';
 
-type View = 'today' | 'path' | 'trainer' | 'words' | 'grammar' | 'progress' | 'settings';
+type View =
+  | 'today'
+  | 'path'
+  | 'trainer'
+  | 'words'
+  | 'grammar'
+  | 'progress'
+  | 'settings';
 type SessionState = { words: VocabularyItem[]; nonce: number };
-type TrainingSessionState = { tasks: VocabularyTrainingTask[]; mode: VocabularyTrainingMode; form: VerbFormFilter; wordId?: string; nonce: number };
+type TrainingSessionState = {
+  tasks: VocabularyTrainingTask[];
+  mode: VocabularyTrainingMode;
+  form: VerbFormFilter;
+  wordId?: string;
+  nonce: number;
+};
 
 function dateLabel() {
-  return new Intl.DateTimeFormat('de-DE', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
+  return new Intl.DateTimeFormat('de-DE', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(new Date());
 }
 
 function localDayKey(date = new Date()) {
@@ -42,17 +108,34 @@ function reviewDayKey(review: AppSnapshot['reviews'][number]) {
 }
 
 function downloadJson(name: string, data: unknown) {
-  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
-  const link = document.createElement('a'); link.href = url; link.download = name; link.click(); URL.revokeObjectURL(url);
+  const url = URL.createObjectURL(
+    new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }),
+  );
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
-function buildDailyRound(snapshot: AppSnapshot, words: VocabularyItem[], roundNumber: number) {
+function buildDailyRound(
+  snapshot: AppSnapshot,
+  words: VocabularyItem[],
+  roundNumber: number,
+) {
   const dayKey = localDayKey();
-  const reviews = snapshot.reviews.filter((review) => reviewDayKey(review) === dayKey);
+  const reviews = snapshot.reviews.filter(
+    (review) => reviewDayKey(review) === dayKey,
+  );
   const lastByWord = new Map<string, (typeof reviews)[number]>();
   for (const review of reviews) lastByWord.set(review.vocabularyId, review);
 
-  const activeIds = new Set(snapshot.activeRound?.dayKey === dayKey ? snapshot.activeRound.vocabularyIds : []);
+  const activeIds = new Set(
+    snapshot.activeRound?.dayKey === dayKey
+      ? snapshot.activeRound.vocabularyIds
+      : [],
+  );
+  const packOrder = new Map(learningPacks.map((pack) => [pack.id, pack.order]));
   const pool = words.filter((word) => {
     const seenToday = lastByWord.has(word.id);
     return word.card.reps === 0 || seenToday || isDue(word.card);
@@ -60,7 +143,26 @@ function buildDailyRound(snapshot: AppSnapshot, words: VocabularyItem[], roundNu
 
   const score = (word: VocabularyItem) => {
     const review = lastByWord.get(word.id);
-    if (!review) return (word.card.reps > 0 && isDue(word.card) ? 500 : word.learningPackId === 'a1-greetings' && word.card.reps === 0 ? 460 : 400) - (activeIds.has(word.id) ? 20 : 0);
+    const roleBonus =
+      word.curriculum?.role === 'core'
+        ? 110
+        : word.curriculum?.role === 'helper'
+          ? 30
+          : word.curriculum?.role === 'sentence-model'
+            ? 20
+            : word.curriculum?.role === 'grammar-variant'
+              ? 10
+              : -20;
+    const unitId = word.curriculum?.unitId ?? word.learningPackId;
+    const unitBonus = Math.max(0, 70 - (packOrder.get(unitId ?? '') ?? 9) * 8);
+    if (!review)
+      return (
+        (word.card.reps > 0 && isDue(word.card)
+          ? 500
+          : word.learningPackId === 'a1-greetings' && word.card.reps === 0
+            ? 620
+            : 400 + roleBonus + unitBonus) - (activeIds.has(word.id) ? 20 : 0)
+      );
     const roundsSince = roundNumber - (review.roundNumber ?? roundNumber - 1);
     if (review.rating === 1) return roundsSince >= 1 ? 700 : 0;
     if (review.rating === 2) return roundsSince >= 1 ? 620 : 0;
@@ -68,7 +170,9 @@ function buildDailyRound(snapshot: AppSnapshot, words: VocabularyItem[], roundNu
     return 10;
   };
 
-  return [...pool].sort((a, b) => score(b) - score(a) || a.card.reps - b.card.reps).slice(0, snapshot.settings.dailyGoal);
+  return [...pool]
+    .sort((a, b) => score(b) - score(a) || a.card.reps - b.card.reps)
+    .slice(0, snapshot.settings.dailyGoal);
 }
 
 export function SemaApp() {
@@ -77,168 +181,1402 @@ export function SemaApp() {
   const [editing, setEditing] = useState<VocabularyItem | 'new' | null>(null);
   const [selectedWord, setSelectedWord] = useState<VocabularyItem | null>(null);
   const [session, setSession] = useState<SessionState | null>(null);
-  const [trainingSession, setTrainingSession] = useState<TrainingSessionState | null>(null);
-  const [grammarSession, setGrammarSession] = useState<GrammarExercise[] | null>(null);
+  const [trainingSession, setTrainingSession] =
+    useState<TrainingSessionState | null>(null);
+  const [grammarSession, setGrammarSession] = useState<
+    GrammarExercise[] | null
+  >(null);
   const [diagnostic, setDiagnostic] = useState(false);
   const [toast, setToast] = useState('');
 
-  useEffect(() => { loadSnapshot().then(setSnapshot).catch(() => setToast('Die lokalen Daten konnten nicht geöffnet werden.')); }, []);
-  useEffect(() => { if (!snapshot) return; const timer = setTimeout(() => saveSnapshot(snapshot).catch(() => setToast('Speichern fehlgeschlagen.')), 120); return () => clearTimeout(timer); }, [snapshot]);
-  useEffect(() => { if (!toast) return; const timer = setTimeout(() => setToast(''), 3200); return () => clearTimeout(timer); }, [toast]);
+  useEffect(() => {
+    loadSnapshot()
+      .then(setSnapshot)
+      .catch(() =>
+        setToast('Die lokalen Daten konnten nicht geöffnet werden.'),
+      );
+  }, []);
+  useEffect(() => {
+    if (!snapshot) return;
+    const timer = setTimeout(
+      () =>
+        saveSnapshot(snapshot).catch(() =>
+          setToast('Speichern fehlgeschlagen.'),
+        ),
+      120,
+    );
+    return () => clearTimeout(timer);
+  }, [snapshot]);
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(''), 3200);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
-  if (!snapshot) return <main className="grid min-h-screen place-items-center bg-background text-foreground"><div className="text-center"><span className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-primary text-xl font-bold text-white">7</span><p className="text-sm text-muted-foreground">Dein Sprachweg wird geladen …</p></div></main>;
+  if (!snapshot)
+    return (
+      <main className="grid min-h-screen place-items-center bg-background text-foreground">
+        <div className="text-center">
+          <span className="mx-auto mb-4 grid size-14 place-items-center rounded-2xl bg-primary text-xl font-bold text-white">
+            7
+          </span>
+          <p className="text-sm text-muted-foreground">
+            Dein Sprachweg wird geladen …
+          </p>
+        </div>
+      </main>
+    );
 
-  const languageWords = snapshot.vocabulary.filter((word) => word.language === snapshot.settings.activeLanguage && word.learningStatus !== 'archived');
-  const words = languageWords.filter((word) => !word.learningStatus || word.learningStatus === 'active');
-  const archivedWords = snapshot.vocabulary.filter((word) => word.language === snapshot.settings.activeLanguage && word.learningStatus === 'archived');
+  const languageWords = snapshot.vocabulary.filter(
+    (word) =>
+      word.language === snapshot.settings.activeLanguage &&
+      word.learningStatus !== 'archived',
+  );
+  const words = languageWords.filter(
+    (word) => !word.learningStatus || word.learningStatus === 'active',
+  );
+  const archivedWords = snapshot.vocabulary.filter(
+    (word) =>
+      word.language === snapshot.settings.activeLanguage &&
+      word.learningStatus === 'archived',
+  );
   const activeWordIds = new Set(words.map((word) => word.id));
-  const activeGrammarExercises = snapshot.grammarExercises.filter((exercise) => !exercise.vocabularyId || activeWordIds.has(exercise.vocabularyId));
+  const activeGrammarExercises = snapshot.grammarExercises.filter(
+    (exercise) =>
+      !exercise.vocabularyId || activeWordIds.has(exercise.vocabularyId),
+  );
   const due = words.filter((word) => isDue(word.card)).length;
   const learned = words.filter((word) => learningStage(word) === 'safe').length;
   const todayKey = localDayKey();
-  const todayCount = snapshot.reviews.filter((review) => reviewDayKey(review) === todayKey).length;
+  const todayCount = snapshot.reviews.filter(
+    (review) => reviewDayKey(review) === todayKey,
+  ).length;
 
   const openCurrentRound = () => {
     const dayKey = localDayKey();
-    const active = snapshot.activeRound?.dayKey === dayKey && snapshot.activeRound.language === snapshot.settings.activeLanguage ? snapshot.activeRound : undefined;
+    const active =
+      snapshot.activeRound?.dayKey === dayKey &&
+      snapshot.activeRound.language === snapshot.settings.activeLanguage
+        ? snapshot.activeRound
+        : undefined;
     if (active) {
-      const selected = active.vocabularyIds.map((id) => words.find((word) => word.id === id)).filter((word): word is VocabularyItem => Boolean(word));
-      if (selected.length) { setSession({ words: selected, nonce: active.roundNumber }); return; }
+      const selected = active.vocabularyIds
+        .map((id) => words.find((word) => word.id === id))
+        .filter((word): word is VocabularyItem => Boolean(word));
+      if (selected.length) {
+        setSession({ words: selected, nonce: active.roundNumber });
+        return;
+      }
     }
     createNewRound();
   };
   const createNewRound = () => {
     const dayKey = localDayKey();
-    const roundNumber = snapshot.activeRound?.dayKey === dayKey ? snapshot.activeRound.roundNumber + 1 : 1;
+    const roundNumber =
+      snapshot.activeRound?.dayKey === dayKey
+        ? snapshot.activeRound.roundNumber + 1
+        : 1;
     const selected = buildDailyRound(snapshot, words, roundNumber);
-    setSnapshot({ ...snapshot, activeRound: { dayKey, language: snapshot.settings.activeLanguage, vocabularyIds: selected.map((word) => word.id), roundNumber } });
+    setSnapshot({
+      ...snapshot,
+      activeRound: {
+        dayKey,
+        language: snapshot.settings.activeLanguage,
+        vocabularyIds: selected.map((word) => word.id),
+        roundNumber,
+      },
+    });
     setSession({ words: selected, nonce: roundNumber });
   };
   const startLearningPack = (packId: string) => {
     const pack = learningPacks.find((item) => item.id === packId);
     if (!pack) return;
-    const selected = pack.vocabularyIds.map((id) => languageWords.find((word) => word.id === id)).filter((word): word is VocabularyItem => Boolean(word));
-    if (!selected.length) { setToast('Die Wörter dieser Lerneinheit wurden aus dem Lernplan entfernt.'); return; }
+    const selected = pack.vocabularyIds
+      .map((id) => languageWords.find((word) => word.id === id))
+      .filter((word): word is VocabularyItem => Boolean(word));
+    if (!selected.length) {
+      setToast(
+        'Die Wörter dieser Lerneinheit wurden aus dem Lernplan entfernt.',
+      );
+      return;
+    }
     const dayKey = localDayKey();
-    const roundNumber = snapshot.activeRound?.dayKey === dayKey ? snapshot.activeRound.roundNumber + 1 : 1;
-    setSnapshot({ ...snapshot, vocabulary: snapshot.vocabulary.map((word) => pack.vocabularyIds.includes(word.id) && word.learningStatus !== 'archived' ? { ...word, learningStatus: 'active', updatedAt: new Date().toISOString() } : word), startedLearningPackIds: Array.from(new Set([...snapshot.startedLearningPackIds, packId])), activeRound: { dayKey, language: snapshot.settings.activeLanguage, vocabularyIds: selected.map((word) => word.id), roundNumber } });
-    setSession({ words: selected.map((word) => ({ ...word, learningStatus: 'active' })), nonce: roundNumber });
+    const roundNumber =
+      snapshot.activeRound?.dayKey === dayKey
+        ? snapshot.activeRound.roundNumber + 1
+        : 1;
+    setSnapshot({
+      ...snapshot,
+      vocabulary: snapshot.vocabulary.map((word) =>
+        pack.vocabularyIds.includes(word.id) &&
+        word.learningStatus !== 'archived'
+          ? {
+              ...word,
+              learningStatus: 'active',
+              updatedAt: new Date().toISOString(),
+            }
+          : word,
+      ),
+      startedLearningPackIds: Array.from(
+        new Set([...snapshot.startedLearningPackIds, packId]),
+      ),
+      activeRound: {
+        dayKey,
+        language: snapshot.settings.activeLanguage,
+        vocabularyIds: selected.map((word) => word.id),
+        roundNumber,
+      },
+    });
+    setSession({
+      words: selected.map((word) => ({ ...word, learningStatus: 'active' })),
+      nonce: roundNumber,
+    });
   };
-  const startVocabularyTraining = (mode: VocabularyTrainingMode, form: VerbFormFilter, wordId?: string) => {
+  const startVocabularyTraining = (
+    mode: VocabularyTrainingMode,
+    form: VerbFormFilter,
+    wordId?: string,
+  ) => {
     const pool = wordId ? words.filter((word) => word.id === wordId) : words;
-    const tasks = buildVocabularyTrainingTasks(pool, mode, form, snapshot.settings.dailyGoal);
-    if (!tasks.length) { setToast('Für diesen Modus sind noch keine passenden aktiven Wörter vorhanden.'); return; }
+    const tasks = buildVocabularyTrainingTasks(
+      pool,
+      mode,
+      form,
+      snapshot.settings.dailyGoal,
+    );
+    if (!tasks.length) {
+      setToast(
+        'Noch kein passendes Wort ist für die Vertiefung bereit. Bitte zuerst einstufen oder unter „Heute“ festigen.',
+      );
+      return;
+    }
     setTrainingSession({ tasks, mode, form, wordId, nonce: 1 });
   };
-  const saveWord = (item: VocabularyItem) => setSnapshot((current) => {
-    if (!current) return current;
-    const prepared = ensureVocabularySkillCards(item);
-    const vocabulary = current.vocabulary.some((word) => word.id === item.id) ? current.vocabulary.map((word) => word.id === item.id ? prepared : word) : [prepared, ...current.vocabulary];
-    const refreshed = grammarExercisesForVocabulary(item);
-    const storedById = new Map(current.grammarExercises.map((exercise) => [exercise.id, exercise]));
-    return { ...current, vocabulary, grammarExercises: [...current.grammarExercises.filter((exercise) => exercise.vocabularyId !== item.id), ...refreshed.map((exercise) => ({ ...exercise, card: storedById.get(exercise.id)?.card ?? exercise.card }))] };
-  });
-  const deleteWord = (id: string) => { if (!window.confirm('Diese Vokabel wirklich dauerhaft löschen? Ihr Lernstand und ihre Übungen werden ebenfalls entfernt.')) return; setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.filter((word) => word.id !== id), deletedVocabularyIds: Array.from(new Set([...current.deletedVocabularyIds, id])), grammarExercises: current.grammarExercises.filter((exercise) => exercise.vocabularyId !== id), wordSkillReviews: current.wordSkillReviews.filter((review) => review.vocabularyId !== id), activeRound: current.activeRound ? { ...current.activeRound, vocabularyIds: current.activeRound.vocabularyIds.filter((wordId) => wordId !== id) } : undefined })); setEditing(null); setSelectedWord(null); setToast('Vokabel dauerhaft gelöscht.'); };
-  const archiveWord = (id: string) => { setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.map((word) => word.id === id ? { ...word, learningStatus: 'archived', updatedAt: new Date().toISOString() } : word), activeRound: current.activeRound ? { ...current.activeRound, vocabularyIds: current.activeRound.vocabularyIds.filter((wordId) => wordId !== id) } : undefined })); setSelectedWord(null); setToast('Vokabel aus dem Lernplan entfernt.'); };
-  const restoreWord = (id: string) => { setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.map((word) => word.id === id ? { ...word, learningStatus: 'active', updatedAt: new Date().toISOString() } : word) })); setToast('Vokabel wieder in den Lernplan aufgenommen.'); };
-  const addReview = (item: VocabularyItem, grade: Grade) => setSnapshot((current) => {
-    if (!current) return current;
-    const now = new Date();
-    const dayKey = localDayKey(now);
-    const firstReviewToday = !current.reviews.some((review) => review.vocabularyId === item.id && reviewDayKey(review) === dayKey);
-    return {
-      ...current,
-      vocabulary: current.vocabulary.map((word) => word.id === item.id ? { ...word, card: firstReviewToday ? schedule(word.card, grade, now) : word.card, updatedAt: now.toISOString() } : word),
-      reviews: [...current.reviews, { id: crypto.randomUUID(), vocabularyId: item.id, rating: grade, reviewedAt: now.toISOString(), dayKey, roundNumber: current.activeRound?.roundNumber, wasNew: firstReviewToday && item.card.reps === 0 }],
-    };
-  });
-  const addWordSkillReview = (task: VocabularyTrainingTask, grade: Grade) => setSnapshot((current) => {
-    if (!current) return current;
-    const now = new Date();
-    const dayKey = localDayKey(now);
-    const firstReviewToday = !current.wordSkillReviews.some((review) => review.vocabularyId === task.word.id && review.skill === task.skill && review.verbForm === task.verbForm && review.dayKey === dayKey);
-    const vocabulary = current.vocabulary.map((word) => {
-      if (word.id !== task.word.id) return word;
-      if (task.skill === 'meaning') return { ...word, card: firstReviewToday ? schedule(word.card, grade, now) : word.card, updatedAt: now.toISOString() };
-      if (task.skill === 'sentences') return { ...word, skillCards: { sentences: firstReviewToday ? schedule(word.skillCards!.sentences, grade, now) : word.skillCards!.sentences, forms: word.skillCards!.forms }, updatedAt: now.toISOString() };
-      if (!task.verbForm) return word;
-      const currentCard = word.skillCards!.forms[task.verbForm]!;
-      return { ...word, skillCards: { sentences: word.skillCards!.sentences, forms: { ...word.skillCards!.forms, [task.verbForm]: firstReviewToday ? schedule(currentCard, grade, now) : currentCard } }, updatedAt: now.toISOString() };
+  const saveWord = (item: VocabularyItem) =>
+    setSnapshot((current) => {
+      if (!current) return current;
+      const prepared = ensureVocabularySkillCards(item);
+      const vocabulary = current.vocabulary.some((word) => word.id === item.id)
+        ? current.vocabulary.map((word) =>
+            word.id === item.id ? prepared : word,
+          )
+        : [prepared, ...current.vocabulary];
+      const refreshed = grammarExercisesForVocabulary(item);
+      const storedById = new Map(
+        current.grammarExercises.map((exercise) => [exercise.id, exercise]),
+      );
+      return {
+        ...current,
+        vocabulary,
+        grammarExercises: [
+          ...current.grammarExercises.filter(
+            (exercise) => exercise.vocabularyId !== item.id,
+          ),
+          ...refreshed.map((exercise) => ({
+            ...exercise,
+            card: storedById.get(exercise.id)?.card ?? exercise.card,
+          })),
+        ],
+      };
     });
-    return { ...current, vocabulary, wordSkillReviews: [...current.wordSkillReviews, { id: crypto.randomUUID(), vocabularyId: task.word.id, skill: task.skill, verbForm: task.verbForm, rating: grade, reviewedAt: now.toISOString(), dayKey }] };
-  });
-  const addGrammarReview = (exercise: GrammarExercise, grade: Grade) => setSnapshot((current) => {
-    if (!current) return current;
-    const now = new Date();
-    const firstReviewToday = !current.grammarReviews.some((review) => review.exerciseId === exercise.id && localDayKey(new Date(review.reviewedAt)) === localDayKey(now));
-    return {
-      ...current,
-      grammarExercises: current.grammarExercises.map((item) => item.id === exercise.id ? { ...item, card: firstReviewToday ? schedule(item.card, grade, now) : item.card } : item),
-      grammarReviews: [...current.grammarReviews, { id: crypto.randomUUID(), exerciseId: exercise.id, rating: grade, reviewedAt: now.toISOString() }],
-    };
-  });
+  const deleteWord = (id: string) => {
+    if (
+      !window.confirm(
+        'Diese Vokabel wirklich dauerhaft löschen? Ihr Lernstand und ihre Übungen werden ebenfalls entfernt.',
+      )
+    )
+      return;
+    setSnapshot(
+      (current) =>
+        current && {
+          ...current,
+          vocabulary: current.vocabulary.filter((word) => word.id !== id),
+          deletedVocabularyIds: Array.from(
+            new Set([...current.deletedVocabularyIds, id]),
+          ),
+          grammarExercises: current.grammarExercises.filter(
+            (exercise) => exercise.vocabularyId !== id,
+          ),
+          wordSkillReviews: current.wordSkillReviews.filter(
+            (review) => review.vocabularyId !== id,
+          ),
+          activeRound: current.activeRound
+            ? {
+                ...current.activeRound,
+                vocabularyIds: current.activeRound.vocabularyIds.filter(
+                  (wordId) => wordId !== id,
+                ),
+              }
+            : undefined,
+        },
+    );
+    setEditing(null);
+    setSelectedWord(null);
+    setToast('Vokabel dauerhaft gelöscht.');
+  };
+  const archiveWord = (id: string) => {
+    setSnapshot(
+      (current) =>
+        current && {
+          ...current,
+          vocabulary: current.vocabulary.map((word) =>
+            word.id === id
+              ? {
+                  ...word,
+                  learningStatus: 'archived',
+                  updatedAt: new Date().toISOString(),
+                }
+              : word,
+          ),
+          activeRound: current.activeRound
+            ? {
+                ...current.activeRound,
+                vocabularyIds: current.activeRound.vocabularyIds.filter(
+                  (wordId) => wordId !== id,
+                ),
+              }
+            : undefined,
+        },
+    );
+    setSelectedWord(null);
+    setToast('Vokabel aus dem Lernplan entfernt.');
+  };
+  const restoreWord = (id: string) => {
+    setSnapshot(
+      (current) =>
+        current && {
+          ...current,
+          vocabulary: current.vocabulary.map((word) =>
+            word.id === id
+              ? {
+                  ...word,
+                  learningStatus: 'active',
+                  updatedAt: new Date().toISOString(),
+                }
+              : word,
+          ),
+        },
+    );
+    setToast('Vokabel wieder in den Lernplan aufgenommen.');
+  };
+  const addReview = (item: VocabularyItem, grade: Grade) =>
+    setSnapshot((current) => {
+      if (!current) return current;
+      const now = new Date();
+      const dayKey = localDayKey(now);
+      const firstReviewToday = !current.reviews.some(
+        (review) =>
+          review.vocabularyId === item.id && reviewDayKey(review) === dayKey,
+      );
+      return {
+        ...current,
+        vocabulary: current.vocabulary.map((word) =>
+          word.id === item.id
+            ? {
+                ...word,
+                card: firstReviewToday
+                  ? schedule(word.card, grade, now)
+                  : word.card,
+                updatedAt: now.toISOString(),
+              }
+            : word,
+        ),
+        reviews: [
+          ...current.reviews,
+          {
+            id: crypto.randomUUID(),
+            vocabularyId: item.id,
+            rating: grade,
+            reviewedAt: now.toISOString(),
+            dayKey,
+            roundNumber: current.activeRound?.roundNumber,
+            wasNew: firstReviewToday && item.card.reps === 0,
+          },
+        ],
+      };
+    });
+  const addWordSkillReview = (task: VocabularyTrainingTask, grade: Grade) =>
+    setSnapshot((current) => {
+      if (!current) return current;
+      const now = new Date();
+      const dayKey = localDayKey(now);
+      const firstReviewToday = !current.wordSkillReviews.some(
+        (review) =>
+          review.vocabularyId === task.word.id &&
+          review.skill === task.skill &&
+          review.verbForm === task.verbForm &&
+          review.dayKey === dayKey,
+      );
+      const vocabulary = current.vocabulary.map((word) => {
+        if (word.id !== task.word.id) return word;
+        if (task.skill === 'meaning')
+          return {
+            ...word,
+            card: firstReviewToday
+              ? schedule(word.card, grade, now)
+              : word.card,
+            updatedAt: now.toISOString(),
+          };
+        if (task.skill === 'sentences')
+          return {
+            ...word,
+            skillCards: {
+              sentences: firstReviewToday
+                ? schedule(word.skillCards!.sentences, grade, now)
+                : word.skillCards!.sentences,
+              forms: word.skillCards!.forms,
+            },
+            updatedAt: now.toISOString(),
+          };
+        if (!task.verbForm) return word;
+        const currentCard = word.skillCards!.forms[task.verbForm]!;
+        return {
+          ...word,
+          skillCards: {
+            sentences: word.skillCards!.sentences,
+            forms: {
+              ...word.skillCards!.forms,
+              [task.verbForm]: firstReviewToday
+                ? schedule(currentCard, grade, now)
+                : currentCard,
+            },
+          },
+          updatedAt: now.toISOString(),
+        };
+      });
+      return {
+        ...current,
+        vocabulary,
+        wordSkillReviews: [
+          ...current.wordSkillReviews,
+          {
+            id: crypto.randomUUID(),
+            vocabularyId: task.word.id,
+            skill: task.skill,
+            verbForm: task.verbForm,
+            rating: grade,
+            reviewedAt: now.toISOString(),
+            dayKey,
+          },
+        ],
+      };
+    });
+  const addGrammarReview = (exercise: GrammarExercise, grade: Grade) =>
+    setSnapshot((current) => {
+      if (!current) return current;
+      const now = new Date();
+      const firstReviewToday = !current.grammarReviews.some(
+        (review) =>
+          review.exerciseId === exercise.id &&
+          localDayKey(new Date(review.reviewedAt)) === localDayKey(now),
+      );
+      return {
+        ...current,
+        grammarExercises: current.grammarExercises.map((item) =>
+          item.id === exercise.id
+            ? {
+                ...item,
+                card: firstReviewToday
+                  ? schedule(item.card, grade, now)
+                  : item.card,
+              }
+            : item,
+        ),
+        grammarReviews: [
+          ...current.grammarReviews,
+          {
+            id: crypto.randomUUID(),
+            exerciseId: exercise.id,
+            rating: grade,
+            reviewedAt: now.toISOString(),
+          },
+        ],
+      };
+    });
 
   return (
     <main className="min-h-screen bg-background text-foreground">
       <div className="mx-auto grid min-h-screen max-w-[1500px] grid-cols-1 lg:grid-cols-[240px_1fr]">
         <aside className="hidden border-r border-border/80 bg-card/55 px-5 py-6 backdrop-blur lg:flex lg:flex-col">
-          <button onClick={() => setView('today')} className="flex items-center gap-3 px-2 text-left"><span className="grid size-10 place-items-center rounded-2xl bg-primary text-lg font-bold text-white">7</span><span><strong className="block font-heading text-xl leading-none">Sema 7</strong><span className="text-xs text-muted-foreground">Mein Sprachweg</span></span></button>
-          <nav className="mt-12 space-y-1" aria-label="Hauptnavigation"><SideNav active={view === 'today'} icon={Sparkles} label="Heute" onClick={() => setView('today')} /><SideNav active={view === 'path'} icon={MapIcon} label="Lernpfad" onClick={() => setView('path')} /><SideNav active={view === 'trainer'} icon={Brain} label="Vokabeltraining" onClick={() => setView('trainer')} /><SideNav active={view === 'words'} icon={Library} label="Meine Wörter" onClick={() => setView('words')} /><SideNav active={view === 'grammar'} icon={BookOpenCheck} label="Grammatik" onClick={() => setView('grammar')} /><SideNav active={view === 'progress'} icon={CalendarDays} label="Mein Profil" onClick={() => setView('progress')} /><SideNav active={view === 'settings'} icon={Settings2} label="Einstellungen" onClick={() => setView('settings')} /></nav>
-          <div className="mt-auto rounded-2xl border border-primary/15 bg-primary/6 p-4"><div className="mb-2 flex items-center gap-2 text-sm font-semibold"><Languages className="size-4 text-primary" /> Nächste Sprache</div><p className="text-xs leading-relaxed text-muted-foreground">Spanisch ist im Datenmodell bereits vorbereitet.</p></div>
+          <button
+            onClick={() => setView('today')}
+            className="flex items-center gap-3 px-2 text-left"
+          >
+            <span className="grid size-10 place-items-center rounded-2xl bg-primary text-lg font-bold text-white">
+              7
+            </span>
+            <span>
+              <strong className="block font-heading text-xl leading-none">
+                Sema 7
+              </strong>
+              <span className="text-xs text-muted-foreground">
+                Mein Sprachweg
+              </span>
+            </span>
+          </button>
+          <nav className="mt-12 space-y-1" aria-label="Hauptnavigation">
+            <SideNav
+              active={view === 'today'}
+              icon={Sparkles}
+              label="Heute"
+              onClick={() => setView('today')}
+            />
+            <SideNav
+              active={view === 'path'}
+              icon={MapIcon}
+              label="Lernpfad"
+              onClick={() => setView('path')}
+            />
+            <SideNav
+              active={view === 'trainer'}
+              icon={Brain}
+              label="Vokabeltraining"
+              onClick={() => setView('trainer')}
+            />
+            <SideNav
+              active={view === 'words'}
+              icon={Library}
+              label="Meine Wörter"
+              onClick={() => setView('words')}
+            />
+            <SideNav
+              active={view === 'grammar'}
+              icon={BookOpenCheck}
+              label="Grammatik"
+              onClick={() => setView('grammar')}
+            />
+            <SideNav
+              active={view === 'progress'}
+              icon={CalendarDays}
+              label="Mein Profil"
+              onClick={() => setView('progress')}
+            />
+            <SideNav
+              active={view === 'settings'}
+              icon={Settings2}
+              label="Einstellungen"
+              onClick={() => setView('settings')}
+            />
+          </nav>
+          <div className="mt-auto rounded-2xl border border-primary/15 bg-primary/6 p-4">
+            <div className="mb-2 flex items-center gap-2 text-sm font-semibold">
+              <Languages className="size-4 text-primary" /> Nächste Sprache
+            </div>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              Spanisch ist im Datenmodell bereits vorbereitet.
+            </p>
+          </div>
         </aside>
         <section className="px-4 pb-28 pt-5 sm:px-8 lg:px-12 lg:pb-12 lg:pt-8">
-          <header className="mx-auto flex max-w-6xl items-center justify-between"><div><p className="text-xs capitalize text-muted-foreground lg:text-sm">{dateLabel()}</p><h1 className="font-heading text-2xl font-bold lg:text-3xl">{view === 'today' ? 'Karibu zurück' : view === 'path' ? 'Mein Lernpfad' : view === 'trainer' ? 'Vokabeltraining' : view === 'words' ? 'Meine Wörter' : view === 'grammar' ? 'Grammatik & Sätze' : view === 'progress' ? 'Mein Sprachprofil' : 'Einstellungen'}</h1></div><Button variant="outline" className="rounded-xl" onClick={() => setEditing('new')}><Plus /><span className="hidden sm:inline">Wort hinzufügen</span></Button></header>
-          {view === 'today' && <Today snapshot={snapshot} words={words} curriculumWords={languageWords} due={due} learned={learned} todayCount={todayCount} onStart={openCurrentRound} onNewRound={createNewRound} onStartPack={startLearningPack} onDiagnostic={() => setDiagnostic(true)} onWords={() => setView('words')} />}
-          {view === 'path' && <LearningPath words={languageWords} startedPackIds={snapshot.startedLearningPackIds} onStart={startLearningPack} onWord={setSelectedWord} />}
-          {view === 'trainer' && <VocabularyTrainer words={words} onStart={startVocabularyTraining} />}
-          {view === 'words' && <Words words={words} archivedWords={archivedWords} onSelect={setSelectedWord} onRestore={restoreWord} />}
-          {view === 'grammar' && <GrammarHub exercises={activeGrammarExercises} words={words} onStart={setGrammarSession} onWord={setSelectedWord} />}
-          {view === 'progress' && <ProfileDashboard snapshot={snapshot} words={words} />}
-          {view === 'settings' && <Settings snapshot={snapshot} onChange={setSnapshot} onToast={setToast} />}
+          <header className="mx-auto flex max-w-6xl items-center justify-between">
+            <div>
+              <p className="text-xs capitalize text-muted-foreground lg:text-sm">
+                {dateLabel()}
+              </p>
+              <h1 className="font-heading text-2xl font-bold lg:text-3xl">
+                {view === 'today'
+                  ? 'Karibu zurück'
+                  : view === 'path'
+                    ? 'Mein Lernpfad'
+                    : view === 'trainer'
+                      ? 'Vokabeltraining'
+                      : view === 'words'
+                        ? 'Meine Wörter'
+                        : view === 'grammar'
+                          ? 'Grammatik & Sätze'
+                          : view === 'progress'
+                            ? 'Mein Sprachprofil'
+                            : 'Einstellungen'}
+              </h1>
+            </div>
+            <Button
+              variant="outline"
+              className="rounded-xl"
+              onClick={() => setEditing('new')}
+            >
+              <Plus />
+              <span className="hidden sm:inline">Wort hinzufügen</span>
+            </Button>
+          </header>
+          {view === 'today' && (
+            <Today
+              snapshot={snapshot}
+              words={words}
+              curriculumWords={languageWords}
+              due={due}
+              learned={learned}
+              todayCount={todayCount}
+              onStart={openCurrentRound}
+              onNewRound={createNewRound}
+              onStartPack={startLearningPack}
+              onDiagnostic={() => setDiagnostic(true)}
+              onWords={() => setView('words')}
+            />
+          )}
+          {view === 'path' && (
+            <LearningPath
+              words={languageWords}
+              startedPackIds={snapshot.startedLearningPackIds}
+              onStart={startLearningPack}
+              onWord={setSelectedWord}
+            />
+          )}
+          {view === 'trainer' && (
+            <VocabularyTrainer
+              words={words}
+              onStart={startVocabularyTraining}
+            />
+          )}
+          {view === 'words' && (
+            <Words
+              words={words}
+              archivedWords={archivedWords}
+              onSelect={setSelectedWord}
+              onRestore={restoreWord}
+            />
+          )}
+          {view === 'grammar' && (
+            <GrammarHub
+              exercises={activeGrammarExercises}
+              words={words}
+              onStart={setGrammarSession}
+              onWord={setSelectedWord}
+            />
+          )}
+          {view === 'progress' && (
+            <ProfileDashboard snapshot={snapshot} words={words} />
+          )}
+          {view === 'settings' && (
+            <Settings
+              snapshot={snapshot}
+              onChange={setSnapshot}
+              onToast={setToast}
+            />
+          )}
         </section>
       </div>
-      <nav className="fixed inset-x-3 bottom-3 z-30 flex overflow-x-auto rounded-2xl border bg-card/95 p-2 shadow-xl backdrop-blur lg:hidden" aria-label="Mobile Navigation">{([['today', Sparkles, 'Heute'], ['path', MapIcon, 'Pfad'], ['trainer', Brain, 'Training'], ['words', Library, 'Wörter'], ['grammar', BookOpenCheck, 'Grammatik'], ['progress', CalendarDays, 'Profil'], ['settings', Settings2, 'Mehr']] as const).map(([key, Icon, label]) => <button key={key} className={`mobile-nav min-w-[68px] flex-1 ${view === key ? 'mobile-nav-active' : ''}`} onClick={() => setView(key)}><Icon /><span>{label}</span></button>)}</nav>
-      {selectedWord && <VocabularyDetail word={snapshot.vocabulary.find((word) => word.id === selectedWord.id) ?? selectedWord} exercises={snapshot.grammarExercises.filter((exercise) => exercise.vocabularyId === selectedWord.id)} onClose={() => setSelectedWord(null)} onEdit={() => { setEditing(selectedWord); setSelectedWord(null); }} onPractice={(items) => { setGrammarSession(items); setSelectedWord(null); }} onTrain={(mode) => { startVocabularyTraining(mode, 'weighted', selectedWord.id); setSelectedWord(null); }} onArchive={() => archiveWord(selectedWord.id)} onDelete={() => deleteWord(selectedWord.id)} />}
-      {editing && <WordEditor item={editing === 'new' ? undefined : editing} onClose={() => setEditing(null)} onSave={(item) => { saveWord(item); setEditing(null); setToast('Vokabel gespeichert.'); }} onDelete={deleteWord} />}
-      {session && <LearningSession key={session.nonce} words={session.words} roundNumber={snapshot.activeRound?.roundNumber ?? 1} onClose={() => setSession(null)} onReview={addReview} onRepeat={() => setSession({ ...session, nonce: session.nonce + 1 })} onNewRound={createNewRound} />}
-      {trainingSession && <VocabularyTrainingSession key={trainingSession.nonce} tasks={trainingSession.tasks} onClose={() => setTrainingSession(null)} onReview={addWordSkillReview} onRepeat={() => setTrainingSession({ ...trainingSession, nonce: trainingSession.nonce + 1 })} onNewSet={() => { const pool = trainingSession.wordId ? words.filter((word) => word.id === trainingSession.wordId) : words; const tasks = buildVocabularyTrainingTasks(pool, trainingSession.mode, trainingSession.form, snapshot.settings.dailyGoal); setTrainingSession({ ...trainingSession, tasks, nonce: trainingSession.nonce + 1 }); }} />}
-      {grammarSession && grammarSession.length > 0 && <GrammarPractice exercises={grammarSession} onClose={() => setGrammarSession(null)} onReview={addGrammarReview} />}
-      {diagnostic && <Diagnostic words={words} onClose={() => setDiagnostic(false)} onFinish={(results) => { setSnapshot((current) => current && ({ ...current, vocabulary: current.vocabulary.map((word) => results[word.id] ? { ...word, card: schedule(word.card, results[word.id]) } : word), settings: { ...current.settings, diagnosticDone: true } })); setDiagnostic(false); setToast('Einstufung gespeichert.'); }} />}
-      {toast && <output className="fixed bottom-24 left-1/2 z-[80] -translate-x-1/2 rounded-xl bg-[#123f3a] px-4 py-3 text-sm font-medium text-white shadow-xl lg:bottom-8">{toast}</output>}
+      <nav
+        className="fixed inset-x-3 bottom-3 z-30 flex overflow-x-auto rounded-2xl border bg-card/95 p-2 shadow-xl backdrop-blur lg:hidden"
+        aria-label="Mobile Navigation"
+      >
+        {(
+          [
+            ['today', Sparkles, 'Heute'],
+            ['path', MapIcon, 'Pfad'],
+            ['trainer', Brain, 'Training'],
+            ['words', Library, 'Wörter'],
+            ['grammar', BookOpenCheck, 'Grammatik'],
+            ['progress', CalendarDays, 'Profil'],
+            ['settings', Settings2, 'Mehr'],
+          ] as const
+        ).map(([key, Icon, label]) => (
+          <button
+            key={key}
+            className={`mobile-nav min-w-[68px] flex-1 ${view === key ? 'mobile-nav-active' : ''}`}
+            onClick={() => setView(key)}
+          >
+            <Icon />
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
+      {selectedWord && (
+        <VocabularyDetail
+          word={
+            snapshot.vocabulary.find((word) => word.id === selectedWord.id) ??
+            selectedWord
+          }
+          exercises={snapshot.grammarExercises.filter(
+            (exercise) => exercise.vocabularyId === selectedWord.id,
+          )}
+          onClose={() => setSelectedWord(null)}
+          onEdit={() => {
+            setEditing(selectedWord);
+            setSelectedWord(null);
+          }}
+          onPractice={(items) => {
+            setGrammarSession(items);
+            setSelectedWord(null);
+          }}
+          onTrain={(mode) => {
+            startVocabularyTraining(mode, 'weighted', selectedWord.id);
+            setSelectedWord(null);
+          }}
+          onArchive={() => archiveWord(selectedWord.id)}
+          onDelete={() => deleteWord(selectedWord.id)}
+        />
+      )}
+      {editing && (
+        <WordEditor
+          item={editing === 'new' ? undefined : editing}
+          onClose={() => setEditing(null)}
+          onSave={(item) => {
+            saveWord(item);
+            setEditing(null);
+            setToast('Vokabel gespeichert.');
+          }}
+          onDelete={deleteWord}
+        />
+      )}
+      {session && (
+        <LearningSession
+          key={session.nonce}
+          words={session.words}
+          roundNumber={snapshot.activeRound?.roundNumber ?? 1}
+          onClose={() => setSession(null)}
+          onReview={addReview}
+          onRepeat={() => setSession({ ...session, nonce: session.nonce + 1 })}
+          onNewRound={createNewRound}
+        />
+      )}
+      {trainingSession && (
+        <VocabularyTrainingSession
+          key={trainingSession.nonce}
+          tasks={trainingSession.tasks}
+          onClose={() => setTrainingSession(null)}
+          onReview={addWordSkillReview}
+          onRepeat={() =>
+            setTrainingSession({
+              ...trainingSession,
+              nonce: trainingSession.nonce + 1,
+            })
+          }
+          onNewSet={() => {
+            const pool = trainingSession.wordId
+              ? words.filter((word) => word.id === trainingSession.wordId)
+              : words;
+            const tasks = buildVocabularyTrainingTasks(
+              pool,
+              trainingSession.mode,
+              trainingSession.form,
+              snapshot.settings.dailyGoal,
+            );
+            setTrainingSession({
+              ...trainingSession,
+              tasks,
+              nonce: trainingSession.nonce + 1,
+            });
+          }}
+        />
+      )}
+      {grammarSession && grammarSession.length > 0 && (
+        <GrammarPractice
+          exercises={grammarSession}
+          onClose={() => setGrammarSession(null)}
+          onReview={addGrammarReview}
+        />
+      )}
+      {diagnostic && (
+        <Diagnostic
+          words={words}
+          onClose={() => setDiagnostic(false)}
+          onFinish={(results) => {
+            setSnapshot(
+              (current) =>
+                current && {
+                  ...current,
+                  vocabulary: current.vocabulary.map((word) =>
+                    results[word.id]
+                      ? {
+                          ...word,
+                          card: schedule(word.card, results[word.id]),
+                          placementStatus:
+                            results[word.id] === 4 ? 'known' : 'learning',
+                        }
+                      : word,
+                  ),
+                  settings: { ...current.settings, diagnosticDone: true },
+                },
+            );
+            setDiagnostic(false);
+            setToast(
+              'Einstufung gespeichert. Bekannte Wörter sind jetzt für die Vertiefung freigegeben.',
+            );
+          }}
+        />
+      )}
+      {toast && (
+        <output className="fixed bottom-24 left-1/2 z-[80] -translate-x-1/2 rounded-xl bg-[#123f3a] px-4 py-3 text-sm font-medium text-white shadow-xl lg:bottom-8">
+          {toast}
+        </output>
+      )}
     </main>
   );
 }
 
-function SideNav({ active, icon: Icon, label, onClick }: { active: boolean; icon: typeof Sparkles; label: string; onClick: () => void }) { return <button className={`nav-item w-full ${active ? 'nav-item-active' : ''}`} onClick={onClick}><Icon />{label}</button>; }
+function SideNav({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: typeof Sparkles;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className={`nav-item w-full ${active ? 'nav-item-active' : ''}`}
+      onClick={onClick}
+    >
+      <Icon />
+      {label}
+    </button>
+  );
+}
 
-function Today({ snapshot, words, curriculumWords, due, learned, todayCount, onStart, onNewRound, onStartPack, onDiagnostic, onWords }: { snapshot: AppSnapshot; words: VocabularyItem[]; curriculumWords: VocabularyItem[]; due: number; learned: number; todayCount: number; onStart: () => void; onNewRound: () => void; onStartPack: (packId: string) => void; onDiagnostic: () => void; onWords: () => void }) {
-  const focus = words.find((word) => word.target.includes('Ninakushukuru')) ?? words[0];
+function Today({
+  snapshot,
+  words,
+  curriculumWords,
+  due,
+  learned,
+  todayCount,
+  onStart,
+  onNewRound,
+  onStartPack,
+  onDiagnostic,
+  onWords,
+}: {
+  snapshot: AppSnapshot;
+  words: VocabularyItem[];
+  curriculumWords: VocabularyItem[];
+  due: number;
+  learned: number;
+  todayCount: number;
+  onStart: () => void;
+  onNewRound: () => void;
+  onStartPack: (packId: string) => void;
+  onDiagnostic: () => void;
+  onWords: () => void;
+}) {
+  const focus =
+    words.find((word) => word.target.includes('Ninakushukuru')) ?? words[0];
   const firstPack = learningPacks[0];
-  const packWords = firstPack.vocabularyIds.map((id) => curriculumWords.find((word) => word.id === id)).filter((word): word is VocabularyItem => Boolean(word));
+  const packWords = firstPack.vocabularyIds
+    .map((id) => curriculumWords.find((word) => word.id === id))
+    .filter((word): word is VocabularyItem => Boolean(word));
   const packPracticed = packWords.filter((word) => word.card.reps > 0).length;
-  const speak = () => { if (!focus || !('speechSynthesis' in window)) return; const speech = new SpeechSynthesisUtterance(focus.target); speech.lang = 'sw-TZ'; speech.rate = .82; speechSynthesis.cancel(); speechSynthesis.speak(speech); };
-  return <>
-    {!snapshot.settings.diagnosticDone && <button onClick={onDiagnostic} className="mx-auto mt-6 flex w-full max-w-6xl items-center gap-3 rounded-2xl border border-[#d5b06b]/40 bg-[#fff4d9] p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md"><span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#efc16c]/30"><CircleAlert className="size-5 text-[#8b621a]" /></span><span className="flex-1"><strong className="block text-sm">Kurze Einstufung empfohlen</strong><span className="text-xs text-muted-foreground">Zeig Sema 7, was du schon kannst.</span></span><ArrowRight className="size-4" /></button>}
-    <div className="mx-auto mt-6 grid max-w-6xl gap-6 xl:grid-cols-[1.35fr_.65fr]">
-      <Card className="relative min-h-[430px] overflow-hidden border-0 bg-[linear-gradient(145deg,#123f3a_0%,#17665c_58%,#d6755c_145%)] text-white shadow-[0_28px_70px_rgba(20,66,61,.23)] ring-0"><div className="absolute right-[-70px] top-[-90px] size-72 rounded-full border-[42px] border-white/5" /><CardHeader className="relative p-6 sm:p-8"><div className="flex items-start justify-between"><div><p className="mb-3 text-xs font-semibold uppercase tracking-[.2em] text-white/65">Deine Runde heute{snapshot.activeRound?.dayKey === localDayKey() ? ` · Runde ${snapshot.activeRound.roundNumber}` : ''}</p><CardTitle className="font-heading text-4xl font-bold sm:text-5xl">7 kleine Schritte.<br />Ein echtes Gespräch.</CardTitle></div><span className="grid size-12 place-items-center rounded-2xl bg-white/12"><Flame className="text-[#ffd19e]" /></span></div></CardHeader><CardContent className="relative p-6 pt-0 sm:p-8 sm:pt-0"><div className="mb-7 grid grid-cols-3 gap-3"><div className="metric"><strong>{todayCount}</strong><span>Antworten heute</span></div><div className="metric"><strong>{words.length}</strong><span>im Wortschatz</span></div><div className="metric"><strong>{learned}</strong><span>sicher gelernt</span></div></div><div className="mb-3 flex justify-between text-xs text-white/75"><span>{due} Karten langfristig fällig</span><span>{snapshot.activeRound?.vocabularyIds.length ?? 0} fest ausgewählt</span></div><Progress value={Math.min(100, todayCount / 35 * 100)} className="mb-7 [&_[data-slot=progress-track]]:bg-white/15 [&_[data-slot=progress-indicator]]:bg-[#ffc081]" /><div className="flex flex-col gap-2 sm:flex-row"><Button onClick={onStart} className="h-12 rounded-xl bg-[#ffd09d] text-[#173e39] hover:bg-[#ffe0bc]">{snapshot.activeRound?.dayKey === localDayKey() ? 'Runde wiederholen' : 'Erste Runde starten'} <ArrowRight /></Button><Button onClick={onNewRound} variant="outline" className="h-12 rounded-xl border-white/25 bg-white/5 text-white hover:bg-white/15 hover:text-white">Neue Runde</Button></div><p className="mt-3 text-xs text-white/60">Die sieben Karten bleiben fest, bis du ausdrücklich „Neue Runde“ wählst.</p></CardContent></Card>
-      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-1">{focus && <Card className="border-0 bg-card shadow-lg ring-border/70"><CardHeader><div className="mb-4 flex items-center justify-between"><span className="grid size-10 place-items-center rounded-xl bg-[#fff0e7] text-[#ba5b45]"><BookOpenText /></span><span className="rounded-full bg-muted px-3 py-1 text-xs">Aus deiner Liste</span></div><CardDescription>Wort des Tages</CardDescription><CardTitle className="font-heading text-3xl text-primary">{focus.target}</CardTitle></CardHeader><CardContent><p>{focus.translation}</p>{focus.morphemes && <div className="mt-4 flex gap-1.5">{focus.morphemes.map((part) => <span key={part} className="rounded-lg bg-muted px-2.5 py-1 font-mono text-xs">{part}</span>)}</div>}<Button variant="outline" className="mt-5 rounded-xl" onClick={speak}><Volume2 /> Aussprache</Button></CardContent></Card>}<Card className="border-0 bg-[#fbf2db] ring-[#e8d7ae]"><CardHeader><span className="mb-3 grid size-10 place-items-center rounded-xl bg-white/70 text-[#9b6c20]"><Mic2 /></span><CardTitle className="font-heading text-xl">Hören & nachsprechen</CardTitle><CardDescription>Gerätestimme, eigene Aufnahme oder hochgeladenes KI-Audio – lokal auf deinem Gerät.</CardDescription></CardHeader><CardContent className="flex gap-2 text-xs text-[#806c48]"><Headphones className="size-4" /> Im Vokabel-Editor verfügbar</CardContent></Card></div>
+  const speak = () => {
+    if (!focus || !('speechSynthesis' in window)) return;
+    const speech = new SpeechSynthesisUtterance(focus.target);
+    speech.lang = 'sw-TZ';
+    speech.rate = 0.82;
+    speechSynthesis.cancel();
+    speechSynthesis.speak(speech);
+  };
+  return (
+    <>
+      {!snapshot.settings.diagnosticDone && (
+        <button
+          onClick={onDiagnostic}
+          className="mx-auto mt-6 flex w-full max-w-6xl items-center gap-3 rounded-2xl border border-[#d5b06b]/40 bg-[#fff4d9] p-4 text-left transition hover:-translate-y-0.5 hover:shadow-md"
+        >
+          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#efc16c]/30">
+            <CircleAlert className="size-5 text-[#8b621a]" />
+          </span>
+          <span className="flex-1">
+            <strong className="block text-sm">
+              Kurze Einstufung empfohlen
+            </strong>
+            <span className="text-xs text-muted-foreground">
+              Zeig Sema 7, was du schon kannst.
+            </span>
+          </span>
+          <ArrowRight className="size-4" />
+        </button>
+      )}
+      <div className="mx-auto mt-6 grid max-w-6xl gap-6 xl:grid-cols-[1.35fr_.65fr]">
+        <Card className="relative min-h-[430px] overflow-hidden border-0 bg-[linear-gradient(145deg,#123f3a_0%,#17665c_58%,#d6755c_145%)] text-white shadow-[0_28px_70px_rgba(20,66,61,.23)] ring-0">
+          <div className="absolute right-[-70px] top-[-90px] size-72 rounded-full border-[42px] border-white/5" />
+          <CardHeader className="relative p-6 sm:p-8">
+            <div className="flex items-start justify-between">
+              <div>
+                <p className="mb-3 text-xs font-semibold uppercase tracking-[.2em] text-white/65">
+                  Deine Runde heute
+                  {snapshot.activeRound?.dayKey === localDayKey()
+                    ? ` · Runde ${snapshot.activeRound.roundNumber}`
+                    : ''}
+                </p>
+                <CardTitle className="font-heading text-4xl font-bold sm:text-5xl">
+                  7 kleine Schritte.
+                  <br />
+                  Ein echtes Gespräch.
+                </CardTitle>
+              </div>
+              <span className="grid size-12 place-items-center rounded-2xl bg-white/12">
+                <Flame className="text-[#ffd19e]" />
+              </span>
+            </div>
+          </CardHeader>
+          <CardContent className="relative p-6 pt-0 sm:p-8 sm:pt-0">
+            <div className="mb-7 grid grid-cols-3 gap-3">
+              <div className="metric">
+                <strong>{todayCount}</strong>
+                <span>Antworten heute</span>
+              </div>
+              <div className="metric">
+                <strong>{words.length}</strong>
+                <span>im Wortschatz</span>
+              </div>
+              <div className="metric">
+                <strong>{learned}</strong>
+                <span>sicher gelernt</span>
+              </div>
+            </div>
+            <div className="mb-3 flex justify-between text-xs text-white/75">
+              <span>{due} Karten langfristig fällig</span>
+              <span>
+                {snapshot.activeRound?.vocabularyIds.length ?? 0} fest
+                ausgewählt
+              </span>
+            </div>
+            <Progress
+              value={Math.min(100, (todayCount / 35) * 100)}
+              className="mb-7 [&_[data-slot=progress-track]]:bg-white/15 [&_[data-slot=progress-indicator]]:bg-[#ffc081]"
+            />
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button
+                onClick={onStart}
+                className="h-12 rounded-xl bg-[#ffd09d] text-[#173e39] hover:bg-[#ffe0bc]"
+              >
+                {snapshot.activeRound?.dayKey === localDayKey()
+                  ? 'Runde wiederholen'
+                  : 'Erste Runde starten'}{' '}
+                <ArrowRight />
+              </Button>
+              <Button
+                onClick={onNewRound}
+                variant="outline"
+                className="h-12 rounded-xl border-white/25 bg-white/5 text-white hover:bg-white/15 hover:text-white"
+              >
+                Neue Runde
+              </Button>
+            </div>
+            <p className="mt-3 text-xs text-white/60">
+              Die sieben Karten bleiben fest, bis du ausdrücklich „Neue Runde“
+              wählst.
+            </p>
+          </CardContent>
+        </Card>
+        <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-1">
+          {focus && (
+            <Card className="border-0 bg-card shadow-lg ring-border/70">
+              <CardHeader>
+                <div className="mb-4 flex items-center justify-between">
+                  <span className="grid size-10 place-items-center rounded-xl bg-[#fff0e7] text-[#ba5b45]">
+                    <BookOpenText />
+                  </span>
+                  <span className="rounded-full bg-muted px-3 py-1 text-xs">
+                    Aus deiner Liste
+                  </span>
+                </div>
+                <CardDescription>Wort des Tages</CardDescription>
+                <CardTitle className="font-heading text-3xl text-primary">
+                  {focus.target}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p>{focus.translation}</p>
+                {focus.morphemes && (
+                  <div className="mt-4 flex gap-1.5">
+                    {focus.morphemes.map((part) => (
+                      <span
+                        key={part}
+                        className="rounded-lg bg-muted px-2.5 py-1 font-mono text-xs"
+                      >
+                        {part}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <Button
+                  variant="outline"
+                  className="mt-5 rounded-xl"
+                  onClick={speak}
+                >
+                  <Volume2 /> Aussprache
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+          <Card className="border-0 bg-[#fbf2db] ring-[#e8d7ae]">
+            <CardHeader>
+              <span className="mb-3 grid size-10 place-items-center rounded-xl bg-white/70 text-[#9b6c20]">
+                <Mic2 />
+              </span>
+              <CardTitle className="font-heading text-xl">
+                Hören & nachsprechen
+              </CardTitle>
+              <CardDescription>
+                Gerätestimme, eigene Aufnahme oder hochgeladenes KI-Audio –
+                lokal auf deinem Gerät.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex gap-2 text-xs text-[#806c48]">
+              <Headphones className="size-4" /> Im Vokabel-Editor verfügbar
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+      <section className="mx-auto mt-8 max-w-6xl">
+        <Card className="overflow-hidden border-0 bg-card ring-border/70">
+          <div className="grid lg:grid-cols-[.72fr_1.28fr]">
+            <CardHeader className="bg-[#fbf2db] p-6 sm:p-7">
+              <div className="flex items-center justify-between">
+                <span className="rounded-full bg-[#123f3a] px-3 py-1 text-xs font-bold text-white">
+                  A1 · Lerneinheit 1
+                </span>
+                <span className="text-xs font-semibold text-[#8f671f]">
+                  {packPracticed}/{packWords.length} begonnen
+                </span>
+              </div>
+              <CardTitle className="mt-4 font-heading text-3xl">
+                {firstPack.title}
+              </CardTitle>
+              <CardDescription className="leading-relaxed">
+                {firstPack.goal}
+              </CardDescription>
+              <Progress
+                className="mt-2"
+                value={
+                  packWords.length
+                    ? (packPracticed / packWords.length) * 100
+                    : 0
+                }
+              />
+              <Button
+                className="mt-3 rounded-xl"
+                disabled={!packWords.length}
+                onClick={() => onStartPack(firstPack.id)}
+              >
+                Lerneinheit beginnen <ArrowRight />
+              </Button>
+            </CardHeader>
+            <CardContent className="p-6 sm:p-7">
+              <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">
+                Ein Gespräch statt sieben Zufallswörter
+              </p>
+              <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                {packWords.map((word, index) => (
+                  <button
+                    key={word.id}
+                    className="flex items-center gap-3 rounded-xl border p-3 text-left transition hover:border-primary/30"
+                    onClick={() => onStartPack(firstPack.id)}
+                  >
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/8 text-xs font-bold text-primary">
+                      {index + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <strong className="block truncate text-sm">
+                        {word.target}
+                      </strong>
+                      <span className="block truncate text-xs text-muted-foreground">
+                        {word.translation}
+                      </span>
+                    </span>
+                    <span className="text-[10px] text-primary">
+                      {learningStageMeta[learningStage(word)].label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              <p className="mt-4 text-xs leading-relaxed text-muted-foreground">
+                Die Lerneinheit bleibt innerhalb einer Runde fest und kann
+                direkt dreimal wiederholt werden. Erst „Neue Runde“ oder eine
+                andere Lerneinheit tauscht die Karten aus.
+              </p>
+            </CardContent>
+          </div>
+        </Card>
+      </section>
+      <section className="mx-auto mt-8 max-w-6xl">
+        <div className="mb-4 flex items-end justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">
+              Dein Fundament
+            </p>
+            <h2 className="font-heading text-2xl font-bold">Als Nächstes</h2>
+          </div>
+          <Button variant="ghost" onClick={onWords}>
+            Alle {words.length} ansehen <ArrowRight />
+          </Button>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {words.slice(0, 3).map((word) => (
+            <Card
+              key={word.id}
+              size="sm"
+              className="border-0 bg-card ring-border/70"
+            >
+              <CardContent className="flex items-center justify-between py-1">
+                <div>
+                  <strong className="block">{word.target}</strong>
+                  <span className="text-sm text-muted-foreground">
+                    {word.translation}
+                  </span>
+                </div>
+                <span className="rounded-full bg-secondary px-2.5 py-1 text-xs">
+                  {word.card.reps ? 'Lernen' : 'Neu'}
+                </span>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </section>
+    </>
+  );
+}
+
+function Words({
+  words,
+  archivedWords,
+  onSelect,
+  onRestore,
+}: {
+  words: VocabularyItem[];
+  archivedWords: VocabularyItem[];
+  onSelect: (item: VocabularyItem) => void;
+  onRestore: (id: string) => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [category, setCategory] = useState('Alle');
+  const categories = [
+    'Alle',
+    ...Array.from(new Set(words.map((word) => word.category))).sort(),
+  ];
+  const shown = words
+    .filter(
+      (word) =>
+        (category === 'Alle' || word.category === category) &&
+        `${word.target} ${word.translation}`
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+    )
+    .sort((a, b) => curriculumOrder(a) - curriculumOrder(b));
+  return (
+    <div className="mx-auto mt-7 max-w-6xl">
+      <div className="mb-5 grid gap-3 sm:grid-cols-[1fr_auto]">
+        <label className="relative" htmlFor="word-search">
+          <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
+          <Input
+            id="word-search"
+            className="pl-9"
+            placeholder="Swahili oder Deutsch suchen …"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </label>
+        <select
+          className="h-9 rounded-xl border bg-card px-3 text-sm"
+          value={category}
+          onChange={(event) => setCategory(event.target.value)}
+        >
+          {categories.map((value) => (
+            <option key={value}>{value}</option>
+          ))}
+        </select>
+      </div>
+      <p className="mb-3 text-sm text-muted-foreground">
+        {shown.length} aktive Einträge · nach Lerneinheit und Lernrolle geordnet
+      </p>
+      <div className="grid gap-3 md:grid-cols-2">
+        {shown.map((word) => {
+          const stage = learningStage(word);
+          return (
+            <button
+              key={word.id}
+              onClick={() => onSelect(word)}
+              className="group rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"
+            >
+              <div className="flex gap-3">
+                <span className="grid size-10 place-items-center rounded-xl bg-primary/8 font-heading font-bold text-primary">
+                  {word.target[0]}
+                </span>
+                <span className="flex-1">
+                  <span className="flex flex-wrap gap-2">
+                    <strong>{word.target}</strong>
+                    {word.cefrLevel && (
+                      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold">
+                        {word.cefrLevel}
+                      </span>
+                    )}
+                    {word.curriculum && (
+                      <span className="rounded-full bg-[#fff0d5] px-2 py-0.5 text-[10px] font-semibold text-[#7c5b20]">
+                        {curriculumRoleLabels[word.curriculum.role]}
+                      </span>
+                    )}
+                    {word.verification && (
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] ${word.verification.status === 'verified' ? 'bg-primary/8 text-primary' : 'bg-[#fff0d5] text-[#885f1e]'}`}
+                      >
+                        {word.verification.status === 'verified'
+                          ? 'Geprüft'
+                          : word.verification.status === 'corrected'
+                            ? 'Korrigiert'
+                            : 'Hinweis'}
+                      </span>
+                    )}
+                  </span>
+                  <span className="block text-sm text-muted-foreground">
+                    {word.translation}
+                  </span>
+                  <span className="mt-2 block text-[11px] text-primary">
+                    {word.category}
+                    {word.lemma ? ` · ${word.lemma}` : ''} ·{' '}
+                    {learningStageMeta[stage].label}
+                  </span>
+                </span>
+                <ArrowRight className="size-4 text-muted-foreground" />
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {archivedWords.length > 0 && (
+        <section className="mt-10">
+          <div className="mb-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Nicht im Lernplan
+            </p>
+            <h2 className="font-heading text-xl font-bold">
+              Aus Lernplan entfernt
+            </h2>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2">
+            {archivedWords.map((word) => (
+              <div
+                key={word.id}
+                className="flex items-center gap-3 rounded-xl border border-dashed bg-card/60 p-3"
+              >
+                <span className="min-w-0 flex-1">
+                  <strong className="block truncate text-sm">
+                    {word.target}
+                  </strong>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {word.translation}
+                  </span>
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="rounded-lg"
+                  onClick={() => onRestore(word.id)}
+                >
+                  <ArchiveRestore /> Wieder aufnehmen
+                </Button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
-    <section className="mx-auto mt-8 max-w-6xl"><Card className="overflow-hidden border-0 bg-card ring-border/70"><div className="grid lg:grid-cols-[.72fr_1.28fr]"><CardHeader className="bg-[#fbf2db] p-6 sm:p-7"><div className="flex items-center justify-between"><span className="rounded-full bg-[#123f3a] px-3 py-1 text-xs font-bold text-white">A1 · Lerneinheit 1</span><span className="text-xs font-semibold text-[#8f671f]">{packPracticed}/{packWords.length} begonnen</span></div><CardTitle className="mt-4 font-heading text-3xl">{firstPack.title}</CardTitle><CardDescription className="leading-relaxed">{firstPack.goal}</CardDescription><Progress className="mt-2" value={packWords.length ? packPracticed / packWords.length * 100 : 0} /><Button className="mt-3 rounded-xl" disabled={!packWords.length} onClick={() => onStartPack(firstPack.id)}>Lerneinheit beginnen <ArrowRight /></Button></CardHeader><CardContent className="p-6 sm:p-7"><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Ein Gespräch statt sieben Zufallswörter</p><div className="mt-4 grid gap-2 sm:grid-cols-2">{packWords.map((word, index) => <button key={word.id} className="flex items-center gap-3 rounded-xl border p-3 text-left transition hover:border-primary/30" onClick={() => onStartPack(firstPack.id)}><span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/8 text-xs font-bold text-primary">{index + 1}</span><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{word.target}</strong><span className="block truncate text-xs text-muted-foreground">{word.translation}</span></span><span className="text-[10px] text-primary">{learningStageMeta[learningStage(word)].label}</span></button>)}</div><p className="mt-4 text-xs leading-relaxed text-muted-foreground">Die Lerneinheit bleibt innerhalb einer Runde fest und kann direkt dreimal wiederholt werden. Erst „Neue Runde“ oder eine andere Lerneinheit tauscht die Karten aus.</p></CardContent></div></Card></section>
-    <section className="mx-auto mt-8 max-w-6xl"><div className="mb-4 flex items-end justify-between"><div><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Dein Fundament</p><h2 className="font-heading text-2xl font-bold">Als Nächstes</h2></div><Button variant="ghost" onClick={onWords}>Alle {words.length} ansehen <ArrowRight /></Button></div><div className="grid gap-3 md:grid-cols-3">{words.slice(0, 3).map((word) => <Card key={word.id} size="sm" className="border-0 bg-card ring-border/70"><CardContent className="flex items-center justify-between py-1"><div><strong className="block">{word.target}</strong><span className="text-sm text-muted-foreground">{word.translation}</span></div><span className="rounded-full bg-secondary px-2.5 py-1 text-xs">{word.card.reps ? 'Lernen' : 'Neu'}</span></CardContent></Card>)}</div></section>
-  </>;
+  );
 }
 
-function Words({ words, archivedWords, onSelect, onRestore }: { words: VocabularyItem[]; archivedWords: VocabularyItem[]; onSelect: (item: VocabularyItem) => void; onRestore: (id: string) => void }) {
-  const [query, setQuery] = useState(''); const [category, setCategory] = useState('Alle'); const categories = ['Alle', ...Array.from(new Set(words.map((word) => word.category))).sort()]; const shown = words.filter((word) => (category === 'Alle' || word.category === category) && `${word.target} ${word.translation}`.toLowerCase().includes(query.toLowerCase()));
-  return <div className="mx-auto mt-7 max-w-6xl"><div className="mb-5 grid gap-3 sm:grid-cols-[1fr_auto]"><label className="relative"><Search className="absolute left-3 top-3 size-4 text-muted-foreground" /><Input className="pl-9" placeholder="Swahili oder Deutsch suchen …" value={query} onChange={(event) => setQuery(event.target.value)} /></label><select className="h-9 rounded-xl border bg-card px-3 text-sm" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((value) => <option key={value}>{value}</option>)}</select></div><p className="mb-3 text-sm text-muted-foreground">{shown.length} aktive Vokabeln · Anklicken für Sprachhinweise und Übungen</p><div className="grid gap-3 md:grid-cols-2">{shown.map((word) => { const stage = learningStage(word); return <button key={word.id} onClick={() => onSelect(word)} className="group rounded-2xl border bg-card p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-md"><div className="flex gap-3"><span className="grid size-10 place-items-center rounded-xl bg-primary/8 font-heading font-bold text-primary">{word.target[0]}</span><span className="flex-1"><span className="flex flex-wrap gap-2"><strong>{word.target}</strong>{word.cefrLevel && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-bold">{word.cefrLevel}</span>}{word.verification && <span className={`rounded-full px-2 py-0.5 text-[10px] ${word.verification.status === 'verified' ? 'bg-primary/8 text-primary' : 'bg-[#fff0d5] text-[#885f1e]'}`}>{word.verification.status === 'verified' ? 'Geprüft' : word.verification.status === 'corrected' ? 'Korrigiert' : 'Hinweis'}</span>}</span><span className="block text-sm text-muted-foreground">{word.translation}</span><span className="mt-2 block text-[11px] text-primary">{word.category}{word.lemma ? ` · ${word.lemma}` : ''} · {learningStageMeta[stage].label}</span></span><ArrowRight className="size-4 text-muted-foreground" /></div></button>; })}</div>{archivedWords.length > 0 && <section className="mt-10"><div className="mb-3"><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Nicht im Lernplan</p><h2 className="font-heading text-xl font-bold">Aus Lernplan entfernt</h2></div><div className="grid gap-2 md:grid-cols-2">{archivedWords.map((word) => <div key={word.id} className="flex items-center gap-3 rounded-xl border border-dashed bg-card/60 p-3"><span className="min-w-0 flex-1"><strong className="block truncate text-sm">{word.target}</strong><span className="block truncate text-xs text-muted-foreground">{word.translation}</span></span><Button size="sm" variant="outline" className="rounded-lg" onClick={() => onRestore(word.id)}><ArchiveRestore /> Wieder aufnehmen</Button></div>)}</div></section>}</div>;
+function Settings({
+  snapshot,
+  onChange,
+  onToast,
+}: {
+  snapshot: AppSnapshot;
+  onChange: (value: AppSnapshot) => void;
+  onToast: (message: string) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const exportBackup = async () => {
+    downloadJson(
+      `sema-7-backup-${new Date().toISOString().slice(0, 10)}.json`,
+      await createBackup(snapshot),
+    );
+    onToast('Vollständiges Backup erstellt.');
+  };
+  const importBackup = async (file?: File) => {
+    if (!file) return;
+    try {
+      const next = await restoreBackup(
+        JSON.parse(await file.text()) as BackupFile,
+      );
+      onChange(next);
+      onToast('Backup wiederhergestellt.');
+    } catch (error) {
+      onToast(error instanceof Error ? error.message : 'Ungültiges Backup.');
+    }
+  };
+  return (
+    <div className="mx-auto mt-7 grid max-w-6xl gap-6 lg:grid-cols-2">
+      <Card className="border-0 bg-card ring-border/70">
+        <CardHeader>
+          <CardTitle className="font-heading text-2xl">
+            Meine Lernroutine
+          </CardTitle>
+          <CardDescription>Klein, regelmäßig und adaptiv.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <label className="block" htmlFor="daily-goal">
+            <span className="mb-2 block text-sm font-medium">
+              Karten pro Runde
+            </span>
+            <select
+              id="daily-goal"
+              className="h-10 w-full rounded-xl border bg-background px-3"
+              value={snapshot.settings.dailyGoal}
+              onChange={(event) =>
+                onChange({
+                  ...snapshot,
+                  settings: {
+                    ...snapshot.settings,
+                    dailyGoal: Number(event.target.value),
+                  },
+                })
+              }
+            >
+              {[5, 7, 10].map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                  {value === 7 ? ' – empfohlen' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block" htmlFor="target-date">
+            <span className="mb-2 block text-sm font-medium">Sprachziel</span>
+            <Input
+              id="target-date"
+              type="date"
+              value={snapshot.settings.targetDate}
+              onChange={(event) =>
+                onChange({
+                  ...snapshot,
+                  settings: {
+                    ...snapshot.settings,
+                    targetDate: event.target.value,
+                  },
+                })
+              }
+            />
+          </label>
+          <div className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">
+            FSRS plant deine Wiederholungen. Die Daten bleiben auf deinem Gerät.
+          </div>
+        </CardContent>
+      </Card>
+      <Card className="border-0 bg-card ring-border/70">
+        <CardHeader>
+          <CardTitle className="font-heading text-2xl">
+            Sichern & umziehen
+          </CardTitle>
+          <CardDescription>
+            Inklusive Lernstand, Bilder und Audios.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Button
+            className="w-full justify-start rounded-xl"
+            variant="outline"
+            onClick={exportBackup}
+          >
+            <Download /> Backup exportieren
+          </Button>
+          <Button
+            className="w-full justify-start rounded-xl"
+            variant="outline"
+            onClick={() => fileRef.current?.click()}
+          >
+            <Upload /> Backup wiederherstellen
+          </Button>
+          <input
+            ref={fileRef}
+            hidden
+            type="file"
+            accept="application/json"
+            onChange={(event) => importBackup(event.target.files?.[0])}
+          />
+        </CardContent>
+      </Card>
+      <Card className="overflow-hidden border-0 bg-[#123f3a] text-white ring-0 lg:col-span-2">
+        <div className="grid md:grid-cols-[1fr_300px]">
+          <CardContent className="p-6">
+            <p className="text-xs uppercase tracking-[.18em] text-[#ffd09d]">
+              Phase 2
+            </p>
+            <h2 className="mt-2 font-heading text-3xl font-bold">
+              Spanisch, gleiche Methode.
+            </h2>
+            <p className="mt-3 text-sm text-white/70">
+              Ein separates spanisches Deck lässt sich ergänzen, ohne deinen
+              Swahili-Lernstand anzutasten.
+            </p>
+          </CardContent>
+          <Image
+            src="/og.png"
+            alt="Sema 7 – Mein persönlicher Sprachweg"
+            width={600}
+            height={288}
+            className="h-full min-h-36 w-full object-cover opacity-85"
+          />
+        </div>
+      </Card>
+    </div>
+  );
 }
 
-function Settings({ snapshot, onChange, onToast }: { snapshot: AppSnapshot; onChange: (value: AppSnapshot) => void; onToast: (message: string) => void }) {
-  const fileRef = useRef<HTMLInputElement>(null); const exportBackup = async () => { downloadJson(`sema-7-backup-${new Date().toISOString().slice(0, 10)}.json`, await createBackup(snapshot)); onToast('Vollständiges Backup erstellt.'); }; const importBackup = async (file?: File) => { if (!file) return; try { const next = await restoreBackup(JSON.parse(await file.text()) as BackupFile); onChange(next); onToast('Backup wiederhergestellt.'); } catch (error) { onToast(error instanceof Error ? error.message : 'Ungültiges Backup.'); } };
-  return <div className="mx-auto mt-7 grid max-w-6xl gap-6 lg:grid-cols-2"><Card className="border-0 bg-card ring-border/70"><CardHeader><CardTitle className="font-heading text-2xl">Meine Lernroutine</CardTitle><CardDescription>Klein, regelmäßig und adaptiv.</CardDescription></CardHeader><CardContent className="space-y-5"><label className="block"><span className="mb-2 block text-sm font-medium">Karten pro Runde</span><select className="h-10 w-full rounded-xl border bg-background px-3" value={snapshot.settings.dailyGoal} onChange={(event) => onChange({ ...snapshot, settings: { ...snapshot.settings, dailyGoal: Number(event.target.value) } })}>{[5, 7, 10].map((value) => <option key={value} value={value}>{value}{value === 7 ? ' – empfohlen' : ''}</option>)}</select></label><label className="block"><span className="mb-2 block text-sm font-medium">Sprachziel</span><Input type="date" value={snapshot.settings.targetDate} onChange={(event) => onChange({ ...snapshot, settings: { ...snapshot.settings, targetDate: event.target.value } })} /></label><div className="rounded-xl bg-muted p-3 text-xs text-muted-foreground">FSRS plant deine Wiederholungen. Die Daten bleiben auf deinem Gerät.</div></CardContent></Card><Card className="border-0 bg-card ring-border/70"><CardHeader><CardTitle className="font-heading text-2xl">Sichern & umziehen</CardTitle><CardDescription>Inklusive Lernstand, Bilder und Audios.</CardDescription></CardHeader><CardContent className="space-y-3"><Button className="w-full justify-start rounded-xl" variant="outline" onClick={exportBackup}><Download /> Backup exportieren</Button><Button className="w-full justify-start rounded-xl" variant="outline" onClick={() => fileRef.current?.click()}><Upload /> Backup wiederherstellen</Button><input ref={fileRef} hidden type="file" accept="application/json" onChange={(event) => importBackup(event.target.files?.[0])} /></CardContent></Card><Card className="overflow-hidden border-0 bg-[#123f3a] text-white ring-0 lg:col-span-2"><div className="grid md:grid-cols-[1fr_300px]"><CardContent className="p-6"><p className="text-xs uppercase tracking-[.18em] text-[#ffd09d]">Phase 2</p><h2 className="mt-2 font-heading text-3xl font-bold">Spanisch, gleiche Methode.</h2><p className="mt-3 text-sm text-white/70">Ein separates spanisches Deck lässt sich ergänzen, ohne deinen Swahili-Lernstand anzutasten.</p></CardContent><img src="/og.png" alt="Sema 7 – Mein persönlicher Sprachweg" className="h-full min-h-36 w-full object-cover opacity-85" /></div></Card></div>;
-}
-
-function Diagnostic({ words, onClose, onFinish }: { words: VocabularyItem[]; onClose: () => void; onFinish: (ratings: Record<string, Grade>) => void }) {
-  const [index, setIndex] = useState(0); const [ratings, setRatings] = useState<Record<string, Grade>>({}); const word = words[index]; const choose = (grade: Grade) => { const next = { ...ratings, [word.id]: grade }; if (index + 1 === words.length) onFinish(next); else { setRatings(next); setIndex(index + 1); } };
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-[#082b28]/60 p-3 backdrop-blur-sm"><div className="w-full max-w-xl rounded-3xl bg-card p-6 shadow-2xl"><div className="flex justify-between"><div><p className="text-xs uppercase tracking-wider text-primary">Einstufung</p><h2 className="font-heading text-2xl font-bold">Was erkennst du schon?</h2></div><Button variant="ghost" onClick={onClose}>Schließen</Button></div><Progress className="mt-4" value={index / words.length * 100} /><p className="mt-2 text-xs text-muted-foreground">{index + 1} von {words.length}</p><h3 className="my-10 text-center font-heading text-4xl font-bold text-primary">{word.target}</h3><div className="grid gap-2 sm:grid-cols-3"><Button variant="outline" onClick={() => choose(1)}>Noch neu</Button><Button variant="outline" onClick={() => choose(2)}>Unsicher</Button><Button onClick={() => choose(4)}><Check /> Kann ich</Button></div></div></div>;
+function Diagnostic({
+  words,
+  onClose,
+  onFinish,
+}: {
+  words: VocabularyItem[];
+  onClose: () => void;
+  onFinish: (ratings: Record<string, Grade>) => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const [ratings, setRatings] = useState<Record<string, Grade>>({});
+  const word = words[index];
+  const choose = (grade: Grade) => {
+    const next = { ...ratings, [word.id]: grade };
+    if (index + 1 === words.length) onFinish(next);
+    else {
+      setRatings(next);
+      setIndex(index + 1);
+    }
+  };
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-[#082b28]/60 p-3 backdrop-blur-sm">
+      <div className="w-full max-w-xl rounded-3xl bg-card p-6 shadow-2xl">
+        <div className="flex justify-between">
+          <div>
+            <p className="text-xs uppercase tracking-wider text-primary">
+              Einstufung
+            </p>
+            <h2 className="font-heading text-2xl font-bold">
+              Was erkennst du schon?
+            </h2>
+          </div>
+          <Button variant="ghost" onClick={onClose}>
+            Schließen
+          </Button>
+        </div>
+        <Progress className="mt-4" value={(index / words.length) * 100} />
+        <p className="mt-2 text-xs text-muted-foreground">
+          {index + 1} von {words.length}
+        </p>
+        <h3 className="my-10 text-center font-heading text-4xl font-bold text-primary">
+          {word.target}
+        </h3>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <Button variant="outline" onClick={() => choose(1)}>
+            Noch neu
+          </Button>
+          <Button variant="outline" onClick={() => choose(2)}>
+            Unsicher
+          </Button>
+          <Button onClick={() => choose(4)}>
+            <Check /> Kann ich
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
