@@ -50,6 +50,7 @@ import {
   createBackup,
   loadSnapshot,
   restoreBackup,
+  saveMedia,
   saveSnapshot,
 } from '@/lib/db';
 import { grammarExercisesForVocabulary } from '@/lib/grammar-content';
@@ -170,7 +171,8 @@ function buildDailyRound(
     return 10;
   };
 
-  return [...pool]
+  const candidates = pool.length ? pool : words;
+  return [...candidates]
     .sort((a, b) => score(b) - score(a) || a.card.reps - b.card.reps)
     .slice(0, snapshot.settings.dailyGoal);
 }
@@ -277,6 +279,10 @@ export function SemaApp() {
         ? snapshot.activeRound.roundNumber + 1
         : 1;
     const selected = buildDailyRound(snapshot, words, roundNumber);
+    if (!selected.length) {
+      setToast('In deinem aktiven Lernplan sind noch keine Karten vorhanden.');
+      return;
+    }
     setSnapshot({
       ...snapshot,
       activeRound: {
@@ -379,6 +385,43 @@ export function SemaApp() {
         ],
       };
     });
+  const saveMemoryHelp = async (
+    item: VocabularyItem,
+    values: { personalMnemonic?: string; image?: File },
+  ) => {
+    let imageMediaId = item.imageMediaId;
+    if (values.image) {
+      imageMediaId = crypto.randomUUID();
+      await saveMedia(imageMediaId, values.image);
+    }
+    const updated: VocabularyItem = {
+      ...item,
+      personalMnemonic: values.personalMnemonic?.trim() || undefined,
+      imageMediaId,
+      updatedAt: new Date().toISOString(),
+    };
+    setSnapshot((current) =>
+      current
+        ? {
+            ...current,
+            vocabulary: current.vocabulary.map((word) =>
+              word.id === updated.id ? updated : word,
+            ),
+          }
+        : current,
+    );
+    setSession((current) =>
+      current
+        ? {
+            ...current,
+            words: current.words.map((word) =>
+              word.id === updated.id ? updated : word,
+            ),
+          }
+        : current,
+    );
+    return updated;
+  };
   const deleteWord = (id: string) => {
     if (
       !window.confirm(
@@ -825,6 +868,7 @@ export function SemaApp() {
           roundNumber={snapshot.activeRound?.roundNumber ?? 1}
           onClose={() => setSession(null)}
           onReview={addReview}
+          onSaveMemoryHelp={saveMemoryHelp}
           onRepeat={() => setSession({ ...session, nonce: session.nonce + 1 })}
           onNewRound={createNewRound}
         />

@@ -333,33 +333,39 @@ export function VocabularyDetail({
                 Übungen zu diesem Wort
               </h3>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <button
-                  className="rounded-2xl border bg-card p-4 text-left transition hover:border-primary/30 hover:shadow-md"
-                  onClick={() => onPractice(grammar)}
-                >
-                  <BookOpenCheck className="size-5 text-primary" />
-                  <strong className="mt-3 block">Grammatik üben</strong>
-                  <span className="text-sm text-muted-foreground">
-                    {grammar.length} Aufgaben: Formen, Verneinung, Aufbau
-                  </span>
-                </button>
-                <button
-                  disabled={!sentences.length}
-                  className="rounded-2xl border bg-card p-4 text-left transition hover:border-primary/30 hover:shadow-md disabled:opacity-45"
-                  onClick={() => onPractice(sentences)}
-                >
-                  <CheckCircle2 className="size-5 text-primary" />
-                  <strong className="mt-3 block">Satz üben</strong>
-                  <span className="text-sm text-muted-foreground">
-                    Den Beispielsatz selbst bilden und prüfen
-                  </span>
-                </button>
+                {grammar.length > 0 && (
+                  <button
+                    className="rounded-2xl border bg-card p-4 text-left transition hover:border-primary/30 hover:shadow-md"
+                    onClick={() => onPractice(grammar)}
+                  >
+                    <BookOpenCheck className="size-5 text-primary" />
+                    <strong className="mt-3 block">Grammatik üben</strong>
+                    <span className="text-sm text-muted-foreground">
+                      {grammar.length} Aufgaben: Formen, Verneinung, Aufbau
+                    </span>
+                  </button>
+                )}
+                {sentences.length > 0 && (
+                  <button
+                    className="rounded-2xl border bg-card p-4 text-left transition hover:border-primary/30 hover:shadow-md"
+                    onClick={() => onPractice(sentences)}
+                  >
+                    <CheckCircle2 className="size-5 text-primary" />
+                    <strong className="mt-3 block">
+                      Satz oder Antwort üben
+                    </strong>
+                    <span className="text-sm text-muted-foreground">
+                      Den hinterlegten Satz oder die passende Antwort selbst
+                      bilden
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
           ) : (
             <div className="rounded-2xl border border-dashed p-5 text-sm text-muted-foreground">
-              Für dieses Wort gibt es noch kein Verbprofil. Du kannst weiterhin
-              einen Beispielsatz und eigene Hinweise hinterlegen.
+              Für dieses Wort sind noch keine prüfbaren Grammatik- oder
+              Satzaufgaben hinterlegt.
             </div>
           )}
           {(word.personalMnemonic || word.mnemonicSuggestion) && (

@@ -1,6 +1,13 @@
 'use client';
 
-import { ArrowRight, Check, Layers3, Map } from 'lucide-react';
+import {
+  ArrowRight,
+  BookOpenCheck,
+  Brain,
+  Check,
+  Layers3,
+  Map,
+} from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -47,6 +54,38 @@ export function LearningPath({
           <span className="grid size-16 place-items-center rounded-2xl bg-white/10">
             <Map className="size-8 text-[#ffd09d]" />
           </span>
+        </CardContent>
+      </Card>
+
+      <Card className="border-0 bg-card ring-border/70">
+        <CardContent className="grid gap-3 p-5 md:grid-cols-[1fr_auto_1fr] md:items-center">
+          <div className="flex gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/8">
+              <Brain className="size-5 text-primary" />
+            </span>
+            <div>
+              <strong className="block">
+                Lernpfad = Inhalt und Reihenfolge
+              </strong>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Hier lernst du die sieben Bedeutungen und Gesprächsbausteine
+                einer Situation.
+              </p>
+            </div>
+          </div>
+          <ArrowRight className="hidden size-5 text-muted-foreground md:block" />
+          <div className="flex gap-3">
+            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-[#fff0d5]">
+              <BookOpenCheck className="size-5 text-[#8f671f]" />
+            </span>
+            <div>
+              <strong className="block">Grammatik = Formen und Satzbau</strong>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                Passende Übungen hängen an denselben Wörtern, haben aber einen
+                eigenen Lernstand und Terminplan.
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
