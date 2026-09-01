@@ -2,6 +2,8 @@
 
 import { createSeedVocabulary } from '@/lib/seed-vocabulary';
 import { createGrammarExercises } from '@/lib/grammar-content';
+import { learningPacks } from '@/lib/curriculum';
+import { ensureVocabularySkillCards } from '@/lib/vocabulary-training';
 import type { AppSnapshot, BackupFile } from '@/lib/types';
 import { auditVocabulary } from '@/lib/vocabulary-audit';
 
@@ -30,12 +32,15 @@ async function openDb(): Promise<IDBDatabase> {
 }
 
 export function createInitialSnapshot(): AppSnapshot {
-  const vocabulary = createSeedVocabulary();
+  const plannedIds = new Set(learningPacks.flatMap((pack) => pack.vocabularyIds));
+  const vocabulary = createSeedVocabulary().map((word) => ensureVocabularySkillCards({ ...word, learningStatus: plannedIds.has(word.id) ? 'planned' : word.learningStatus }));
   return {
-    version: 3,
+    version: 4,
     vocabulary,
     deletedVocabularyIds: [],
+    startedLearningPackIds: [],
     reviews: [],
+    wordSkillReviews: [],
     grammarExercises: createGrammarExercises(vocabulary),
     grammarReviews: [],
     settings: {
@@ -52,11 +57,13 @@ export function createInitialSnapshot(): AppSnapshot {
   };
 }
 
-type LegacySnapshot = Omit<AppSnapshot, 'version' | 'grammarExercises' | 'grammarReviews' | 'deletedVocabularyIds'> & {
-  version: 1 | 2 | 3;
+type LegacySnapshot = Omit<AppSnapshot, 'version' | 'grammarExercises' | 'grammarReviews' | 'deletedVocabularyIds' | 'startedLearningPackIds' | 'wordSkillReviews'> & {
+  version: 1 | 2 | 3 | 4;
   grammarExercises?: AppSnapshot['grammarExercises'];
   grammarReviews?: AppSnapshot['grammarReviews'];
   deletedVocabularyIds?: string[];
+  startedLearningPackIds?: string[];
+  wordSkillReviews?: AppSnapshot['wordSkillReviews'];
 };
 
 function migrateSnapshot(raw: LegacySnapshot): AppSnapshot {
@@ -64,10 +71,12 @@ function migrateSnapshot(raw: LegacySnapshot): AppSnapshot {
   const deletedVocabularyIds = raw.deletedVocabularyIds ?? [];
   const deletedIds = new Set(deletedVocabularyIds);
   const existingIds = new Set(raw.vocabulary.map((word) => word.id));
+  const startedLearningPackIds = raw.startedLearningPackIds ?? learningPacks.filter((pack) => pack.vocabularyIds.some((id) => raw.reviews.some((review) => review.vocabularyId === id) || raw.activeRound?.vocabularyIds.includes(id) || raw.vocabulary.find((word) => word.id === id)?.card.reps)).map((pack) => pack.id);
+  const startedIds = new Set(startedLearningPackIds);
   const vocabulary = auditVocabulary([
     ...raw.vocabulary,
     ...seed.filter((word) => !existingIds.has(word.id) && !deletedIds.has(word.id)),
-  ]);
+  ]).map((word) => ensureVocabularySkillCards({ ...word, learningStatus: raw.version < 4 && word.learningPackId && !startedIds.has(word.learningPackId) ? 'planned' : word.learningStatus }));
   const generated = createGrammarExercises(vocabulary);
   const storedById = new Map((raw.grammarExercises ?? []).map((exercise) => [exercise.id, exercise]));
   const grammarExercises = generated.map((exercise) => {
@@ -76,9 +85,11 @@ function migrateSnapshot(raw: LegacySnapshot): AppSnapshot {
   });
   return {
     ...raw,
-    version: 3,
+    version: 4,
     vocabulary,
     deletedVocabularyIds,
+    startedLearningPackIds,
+    wordSkillReviews: raw.wordSkillReviews ?? [],
     grammarExercises,
     grammarReviews: raw.grammarReviews ?? [],
     settings: {
@@ -151,7 +162,7 @@ export async function createBackup(snapshot: AppSnapshot): Promise<BackupFile> {
 
 export async function restoreBackup(backup: BackupFile) {
   const raw = backup.snapshot as unknown as LegacySnapshot;
-  if (backup.app !== 'sema-7' || !raw || ![1, 2, 3].includes(raw.version)) throw new Error('Diese Datei ist kein gültiges Sema-7-Backup.');
+  if (backup.app !== 'sema-7' || !raw || ![1, 2, 3, 4].includes(raw.version)) throw new Error('Diese Datei ist kein gültiges Sema-7-Backup.');
   const migrated = migrateSnapshot(raw);
   const db = await openDb();
   await request(db.transaction('app', 'readwrite').objectStore('app').put(migrated, APP_KEY));

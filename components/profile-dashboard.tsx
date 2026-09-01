@@ -5,8 +5,9 @@ import { BookOpenCheck, CalendarCheck2, Check, CircleDashed, Ear, MapPin, Messag
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { learningPacks } from '@/lib/curriculum';
-import { learningStage, learningStageMeta, type LearningStage } from '@/lib/learning-status';
+import { learningStage, type LearningStage } from '@/lib/learning-status';
 import { isDue } from '@/lib/scheduler';
+import { wordMastery } from '@/lib/vocabulary-training';
 import type { AppSnapshot, VocabularyItem } from '@/lib/types';
 
 function dayKey(value: Date) {
@@ -24,7 +25,7 @@ function estimatedLevel(score: number) {
 
 export function ProfileDashboard({ snapshot, words }: { snapshot: AppSnapshot; words: VocabularyItem[] }) {
   const stages = words.reduce<Record<LearningStage, number>>((counts, word) => { counts[learningStage(word)] += 1; return counts; }, { new: 0, learning: 0, stable: 0, safe: 0 });
-  const vocabScore = words.length ? Math.round(words.reduce((sum, word) => sum + learningStageMeta[learningStage(word)].weight, 0) / words.length * 100) : 0;
+  const vocabScore = words.length ? Math.round(words.reduce((sum, word) => sum + wordMastery(word).overall, 0) / words.length) : 0;
   const activeIds = new Set(words.map((word) => word.id));
   const activeExercises = snapshot.grammarExercises.filter((exercise) => !exercise.vocabularyId || activeIds.has(exercise.vocabularyId));
   const practicedGrammar = activeExercises.filter((exercise) => exercise.card.reps > 0).length;
@@ -36,7 +37,7 @@ export function ProfileDashboard({ snapshot, words }: { snapshot: AppSnapshot; w
   const level = estimatedLevel(score);
   const due = words.filter((word) => isDue(word.card)).length;
   const firstPack = learningPacks[0];
-  const packWords = words.filter((word) => firstPack.vocabularyIds.includes(word.id));
+  const packWords = snapshot.vocabulary.filter((word) => firstPack.vocabularyIds.includes(word.id) && word.learningStatus !== 'archived');
   const packPracticed = packWords.filter((word) => word.card.reps > 0).length;
 
   return <div className="mx-auto mt-7 max-w-6xl space-y-6">
@@ -51,7 +52,7 @@ export function ProfileDashboard({ snapshot, words }: { snapshot: AppSnapshot; w
 
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><SkillCard icon={Sparkles} title="Wortschatz" value={vocabScore} detail={`${stages.learning} im Lernen · ${stages.stable} stabil · ${stages.safe} sicher`} /><SkillCard icon={BookOpenCheck} title="Grammatik" value={grammarScore} detail={`${practicedGrammar} Aufgaben begonnen`} /><SkillCard icon={CalendarCheck2} title="Lernroutine" value={routineScore} detail={`${activeDays} von 7 Tagen`} /><SkillCard icon={Ear} title="Hören & Sprechen" value={0} detail="noch nicht geprüft" pending /></section>
 
-    <Card className="border-0 bg-card ring-border/70"><CardHeader><div className="flex flex-wrap items-center justify-between gap-2"><div><CardDescription>A1 · Paket 1</CardDescription><CardTitle className="font-heading text-2xl">{firstPack.title}</CardTitle></div><span className="rounded-full bg-primary/8 px-3 py-1 text-xs font-semibold text-primary">{packPracticed}/{packWords.length} begonnen</span></div></CardHeader><CardContent><Progress value={packWords.length ? packPracticed / packWords.length * 100 : 0} /><div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4"><StageBadge label="Neu" value={stages.new} /><StageBadge label="Im Lernen" value={stages.learning} /><StageBadge label="Stabil" value={stages.stable} /><StageBadge label="Sicher" value={stages.safe} /></div><p className="mt-4 text-xs leading-relaxed text-muted-foreground">„Stabil“ bedeutet: mehrfach an verschiedenen Tagen richtig. „Sicher“ wird erst nach weiteren erfolgreichen Wiederholungen und mindestens etwa 14 Tagen berechneter Gedächtnisstabilität vergeben.</p></CardContent></Card>
+    <Card className="border-0 bg-card ring-border/70"><CardHeader><div className="flex flex-wrap items-center justify-between gap-2"><div><CardDescription>A1 · Lerneinheit 1</CardDescription><CardTitle className="font-heading text-2xl">{firstPack.title}</CardTitle></div><span className="rounded-full bg-primary/8 px-3 py-1 text-xs font-semibold text-primary">{packPracticed}/{packWords.length} begonnen</span></div></CardHeader><CardContent><Progress value={packWords.length ? packPracticed / packWords.length * 100 : 0} /><div className="mt-4 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4"><StageBadge label="Neu" value={stages.new} /><StageBadge label="Im Lernen" value={stages.learning} /><StageBadge label="Stabil" value={stages.stable} /><StageBadge label="Sicher" value={stages.safe} /></div><p className="mt-4 text-xs leading-relaxed text-muted-foreground">„Stabil“ bedeutet: mehrfach an verschiedenen Tagen richtig. „Sicher“ wird erst nach weiteren erfolgreichen Wiederholungen und mindestens etwa 14 Tagen berechneter Gedächtnisstabilität vergeben.</p></CardContent></Card>
 
     <section className="grid gap-5 lg:grid-cols-[.8fr_1.2fr]">
       <Card className="border-0 bg-card ring-border/70"><CardHeader><CardDescription>Dein GER-Ziel</CardDescription><CardTitle className="font-heading text-2xl">Der Weg zu B1</CardTitle></CardHeader><CardContent><div className="relative space-y-5 before:absolute before:bottom-4 before:left-[17px] before:top-4 before:w-px before:bg-border"><LevelStep label="A1" title="Alltag beginnen" active /><LevelStep label="A2" title="Routinen selbstständig bewältigen" /><LevelStep label="B1" title="Spontan sprechen und begründen" target /></div></CardContent></Card>

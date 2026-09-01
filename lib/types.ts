@@ -1,4 +1,6 @@
 export type LanguageCode = 'sw' | 'es';
+export type WordSkillArea = 'meaning' | 'forms' | 'sentences';
+export type VerbFormKey = 'present' | 'past' | 'perfect' | 'future' | 'negative';
 
 export type SerializedCard = {
   due: string;
@@ -27,7 +29,7 @@ export type VocabularyItem = {
   notes?: string;
   sourceText?: string;
   needsReview?: boolean;
-  learningStatus?: 'active' | 'archived';
+  learningStatus?: 'planned' | 'active' | 'archived';
   cefrLevel?: 'A1' | 'A2' | 'B1';
   learningPackId?: string;
   responseTarget?: string;
@@ -64,6 +66,10 @@ export type VocabularyItem = {
   imageMediaId?: string;
   audioMediaId?: string;
   card: SerializedCard;
+  skillCards?: {
+    sentences: SerializedCard;
+    forms: Partial<Record<VerbFormKey, SerializedCard>>;
+  };
   createdAt: string;
   updatedAt: string;
 };
@@ -118,6 +124,16 @@ export type ReviewEntry = {
   wasNew?: boolean;
 };
 
+export type WordSkillReviewEntry = {
+  id: string;
+  vocabularyId: string;
+  skill: WordSkillArea;
+  verbForm?: VerbFormKey;
+  rating: 1 | 2 | 3 | 4;
+  reviewedAt: string;
+  dayKey: string;
+};
+
 export type ActiveRound = {
   dayKey: string;
   language: LanguageCode;
@@ -138,10 +154,12 @@ export type AppSettings = {
 };
 
 export type AppSnapshot = {
-  version: 3;
+  version: 4;
   vocabulary: VocabularyItem[];
   deletedVocabularyIds: string[];
+  startedLearningPackIds: string[];
   reviews: ReviewEntry[];
+  wordSkillReviews: WordSkillReviewEntry[];
   grammarExercises: GrammarExercise[];
   grammarReviews: GrammarReviewEntry[];
   settings: AppSettings;

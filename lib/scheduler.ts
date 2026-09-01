@@ -17,12 +17,16 @@ export function newCard(now = new Date()): SerializedCard {
 }
 
 export function schedule(card: SerializedCard, grade: 1 | 2 | 3 | 4, now = new Date()): SerializedCard {
-  const hydrated = {
+  const hydrated = hydrateCard(card);
+  return serializeCard(scheduler.next(hydrated, now, grade).card);
+}
+
+function hydrateCard(card: SerializedCard) {
+  return {
     ...card,
     due: new Date(card.due),
     last_review: card.last_review ? new Date(card.last_review) : undefined,
   };
-  return serializeCard(scheduler.next(hydrated, now, grade).card);
 }
 
 export function serializeCard(card: {
@@ -39,6 +43,14 @@ export function serializeCard(card: {
 
 export function isDue(card: SerializedCard, now = new Date()) {
   return new Date(card.due).getTime() <= now.getTime();
+}
+
+export function masteryPercent(card: SerializedCard, now = new Date()) {
+  if (card.reps === 0) return 0;
+  const retrievability = scheduler.get_retrievability(hydrateCard(card), now, false);
+  const experience = Math.min(1, card.reps / 4);
+  const stability = Math.min(1, card.stability / 14);
+  return Math.max(1, Math.min(100, Math.round(retrievability * (experience * .7 + stability * .3) * 100)));
 }
 
 export function intervalLabel(card: SerializedCard, grade: 1 | 2 | 3 | 4, now = new Date()) {

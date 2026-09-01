@@ -13,26 +13,26 @@ export const grammarLessons: GrammarLesson[] = [
 ];
 
 type VerbProfile = {
-  infinitive: string; stem: string; meaning: string; you: string; we: string; negativeI: string; firstPresent: string; objectPerspective?: boolean;
+  infinitive: string; stem: string; meaning: string; you: string; we: string; negativeI: string; firstPresent: string; past: string; perfect: string; future: string; objectPerspective?: boolean;
 };
 
 export const verbProfiles: Record<string, VerbProfile> = {
-  enda: { infinitive: 'kwenda', stem: '-enda', meaning: 'gehen', firstPresent: 'ninaenda', you: 'unaenda', we: 'tunaenda', negativeI: 'siendi' },
-  penda: { infinitive: 'kupenda', stem: '-penda', meaning: 'mögen', firstPresent: 'ninapenda', you: 'unapenda', we: 'tunapenda', negativeI: 'sipendi' },
-  taka: { infinitive: 'kutaka', stem: '-taka', meaning: 'wollen', firstPresent: 'ninataka', you: 'unataka', we: 'tunataka', negativeI: 'sitaki' },
-  kuja: { infinitive: 'kuja', stem: '-ja', meaning: 'kommen', firstPresent: 'ninakuja', you: 'unakuja', we: 'tunakuja', negativeI: 'siji' },
-  kula: { infinitive: 'kula', stem: '-la', meaning: 'essen', firstPresent: 'ninakula', you: 'unakula', we: 'tunakula', negativeI: 'sili' },
-  onana: { infinitive: 'kuonana', stem: '-onana', meaning: 'einander sehen', firstPresent: 'ninaonana', you: 'unaonana', we: 'tunaonana', negativeI: 'sionani' },
-  nunua: { infinitive: 'kununua', stem: '-nunua', meaning: 'kaufen', firstPresent: 'ninanunua', you: 'unanunua', we: 'tunanunua', negativeI: 'sinunui' },
-  pika: { infinitive: 'kupika', stem: '-pika', meaning: 'kochen', firstPresent: 'ninapika', you: 'unapika', we: 'tunapika', negativeI: 'sipiki' },
-  omba: { infinitive: 'kuomba', stem: '-omba', meaning: 'bitten', firstPresent: 'ninaomba', you: 'unaomba', we: 'tunaomba', negativeI: 'siombi' },
-  shukuru: { infinitive: 'kushukuru', stem: '-shukuru', meaning: 'danken', firstPresent: 'ninakushukuru', you: 'unanishukuru', we: 'tunakushukuru', negativeI: 'sikushukuru', objectPerspective: true },
-  pa: { infinitive: 'kupa', stem: '-pa', meaning: 'geben', firstPresent: 'ninakupa', you: 'unanipa', we: 'tunakupa', negativeI: 'sikupi', objectPerspective: true },
-  subiri: { infinitive: 'kusubiri', stem: '-subiri', meaning: 'warten', firstPresent: 'ninakusubiri', you: 'unanisubiri', we: 'tunakusubiri', negativeI: 'sikusubiri', objectPerspective: true },
-  saidia: { infinitive: 'kusaidia', stem: '-saidia', meaning: 'helfen', firstPresent: 'ninakusaidia', you: 'unanisaidia', we: 'tunakusaidia', negativeI: 'sikusaidii', objectPerspective: true },
-  pigia: { infinitive: 'kupigia simu', stem: '-pigia', meaning: 'anrufen', firstPresent: 'ninakupigia simu', you: 'unanipigia simu', we: 'tunakupigia simu', negativeI: 'sikupigii simu', objectPerspective: true },
-  ona: { infinitive: 'kuona', stem: '-ona', meaning: 'sehen', firstPresent: 'ninakuona', you: 'unaniona', we: 'tunakuona', negativeI: 'sikuoni', objectPerspective: true },
-  rudi: { infinitive: 'kurudi', stem: '-rudi', meaning: 'zurückkehren', firstPresent: 'ninarudi', you: 'unarudi', we: 'tunarudi', negativeI: 'sirudi' },
+  enda: { infinitive: 'kwenda', stem: '-enda', meaning: 'gehen', firstPresent: 'ninaenda', you: 'unaenda', we: 'tunaenda', negativeI: 'siendi', past: 'nilienda', perfect: 'nimeenda', future: 'nitaenda' },
+  penda: { infinitive: 'kupenda', stem: '-penda', meaning: 'mögen', firstPresent: 'ninapenda', you: 'unapenda', we: 'tunapenda', negativeI: 'sipendi', past: 'nilipenda', perfect: 'nimependa', future: 'nitapenda' },
+  taka: { infinitive: 'kutaka', stem: '-taka', meaning: 'wollen', firstPresent: 'ninataka', you: 'unataka', we: 'tunataka', negativeI: 'sitaki', past: 'nilitaka', perfect: 'nimetaka', future: 'nitataka' },
+  kuja: { infinitive: 'kuja', stem: '-ja', meaning: 'kommen', firstPresent: 'ninakuja', you: 'unakuja', we: 'tunakuja', negativeI: 'siji', past: 'nilikuja', perfect: 'nimekuja', future: 'nitakuja' },
+  kula: { infinitive: 'kula', stem: '-la', meaning: 'essen', firstPresent: 'ninakula', you: 'unakula', we: 'tunakula', negativeI: 'sili', past: 'nilikula', perfect: 'nimekula', future: 'nitakula' },
+  onana: { infinitive: 'kuonana', stem: '-onana', meaning: 'einander sehen', firstPresent: 'ninaonana', you: 'unaonana', we: 'tunaonana', negativeI: 'sionani', past: 'nilionana', perfect: 'nimeonana', future: 'nitaonana' },
+  nunua: { infinitive: 'kununua', stem: '-nunua', meaning: 'kaufen', firstPresent: 'ninanunua', you: 'unanunua', we: 'tunanunua', negativeI: 'sinunui', past: 'nilinunua', perfect: 'nimenunua', future: 'nitanunua' },
+  pika: { infinitive: 'kupika', stem: '-pika', meaning: 'kochen', firstPresent: 'ninapika', you: 'unapika', we: 'tunapika', negativeI: 'sipiki', past: 'nilipika', perfect: 'nimepika', future: 'nitapika' },
+  omba: { infinitive: 'kuomba', stem: '-omba', meaning: 'bitten', firstPresent: 'ninaomba', you: 'unaomba', we: 'tunaomba', negativeI: 'siombi', past: 'niliomba', perfect: 'nimeomba', future: 'nitaomba' },
+  shukuru: { infinitive: 'kushukuru', stem: '-shukuru', meaning: 'danken', firstPresent: 'ninakushukuru', you: 'unanishukuru', we: 'tunakushukuru', negativeI: 'sikushukuru', past: 'nilikushukuru', perfect: 'nimekushukuru', future: 'nitakushukuru', objectPerspective: true },
+  pa: { infinitive: 'kupa', stem: '-pa', meaning: 'geben', firstPresent: 'ninakupa', you: 'unanipa', we: 'tunakupa', negativeI: 'sikupi', past: 'nilikupa', perfect: 'nimekupa', future: 'nitakupa', objectPerspective: true },
+  subiri: { infinitive: 'kusubiri', stem: '-subiri', meaning: 'warten', firstPresent: 'ninakusubiri', you: 'unanisubiri', we: 'tunakusubiri', negativeI: 'sikusubiri', past: 'nilikusubiri', perfect: 'nimekusubiri', future: 'nitakusubiri', objectPerspective: true },
+  saidia: { infinitive: 'kusaidia', stem: '-saidia', meaning: 'helfen', firstPresent: 'ninakusaidia', you: 'unanisaidia', we: 'tunakusaidia', negativeI: 'sikusaidii', past: 'nilikusaidia', perfect: 'nimekusaidia', future: 'nitakusaidia', objectPerspective: true },
+  pigia: { infinitive: 'kupigia simu', stem: '-pigia', meaning: 'anrufen', firstPresent: 'ninakupigia simu', you: 'unanipigia simu', we: 'tunakupigia simu', negativeI: 'sikupigii simu', past: 'nilikupigia simu', perfect: 'nimekupigia simu', future: 'nitakupigia simu', objectPerspective: true },
+  ona: { infinitive: 'kuona', stem: '-ona', meaning: 'sehen', firstPresent: 'ninakuona', you: 'unaniona', we: 'tunakuona', negativeI: 'sikuoni', past: 'nilikuona', perfect: 'nimekuona', future: 'nitakuona', objectPerspective: true },
+  rudi: { infinitive: 'kurudi', stem: '-rudi', meaning: 'zurückkehren', firstPresent: 'ninarudi', you: 'unarudi', we: 'tunarudi', negativeI: 'sirudi', past: 'nilirudi', perfect: 'nimerudi', future: 'nitarudi' },
 };
 
 const vocabularyProfiles: Record<string, string> = {
